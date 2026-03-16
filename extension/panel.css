@@ -28,6 +28,11 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  resize: both;
+  min-width: 320px;
+  min-height: 360px;
+  max-width: min(680px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
   border: 1px solid var(--bt-line);
   border-radius: 22px;
   background:
@@ -313,56 +318,17 @@
   outline: none;
 }
 
-.bt-debug {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--bt-line);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.bt-debug-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--bt-text-muted);
-  font-size: 12px;
-}
-
-.bt-debug-head button {
+.bt-export-btn {
+  height: 36px;
   border: 0;
-  background: transparent;
-  color: #8ed6ff;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #cfeaff;
   cursor: pointer;
   font-size: 12px;
+  font-weight: 700;
 }
 
-.bt-debug-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 140px;
-  overflow-y: auto;
-}
-
-.bt-debug-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--bt-text-muted);
-  font-size: 11px;
-}
-
-.bt-debug-item strong {
-  color: #cdeaff;
-  font-size: 11px;
-}
-
-.bt-debug-time {
-  color: rgba(255, 255, 255, 0.45);
+.bt-export-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
 }

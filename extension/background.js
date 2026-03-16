@@ -98,6 +98,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  if (message.type === "bt:download-log") {
+    const filename = sanitizeFilename(message.filename || `bilibili-together-log-${Date.now()}.txt`);
+    const url = `data:text/plain;charset=utf-8,${encodeURIComponent(String(message.content || ""))}`;
+    chrome.downloads.download(
+      {
+        url,
+        filename,
+        saveAs: true,
+        conflictAction: "uniquify",
+      },
+      () => {
+        sendResponse({ ok: true });
+      }
+    );
+    return true;
+  }
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
@@ -176,6 +193,10 @@ function disconnectSocket(tabId) {
 
 function postToTab(tabId, message) {
   chrome.tabs.sendMessage(tabId, message).catch(() => {});
+}
+
+function sanitizeFilename(name) {
+  return String(name).replace(/[<>:"/\\|?*\x00-\x1f]/g, "_");
 }
 
 function postSocketEvent(tabId, event) {

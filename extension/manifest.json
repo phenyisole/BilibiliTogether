@@ -5,7 +5,8 @@
   "description": "Two-person synchronized watch and chat for Bilibili web videos.",
   "permissions": [
     "storage",
-    "tabs"
+    "tabs",
+    "downloads"
   ],
   "host_permissions": [
     "https://www.bilibili.com/*",

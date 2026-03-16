@@ -9,7 +9,8 @@ const STORAGE_KEYS = [
   "panelX",
   "panelY",
   "collapsed",
-  "debugEnabled",
+  "panelWidth",
+  "panelHeight",
 ];
 const VIDEO_SELECTORS = [
   ".bpx-player-video-wrap video",
@@ -37,13 +38,14 @@ const state = {
   settingsOpen: false,
   speechEnabled: false,
   rememberPanel: true,
-  debugEnabled: true,
   collapsed: false,
   dragPointerId: null,
   dragOffsetX: 0,
   dragOffsetY: 0,
   panelX: null,
   panelY: 88,
+  panelWidth: 348,
+  panelHeight: 620,
   voicesReady: false,
   hostSyncTimer: null,
   guestEnforceTimer: null,
@@ -75,9 +77,10 @@ async function init() {
   state.speechEnabled = Boolean(stored.speechEnabled);
   state.rememberPanel = stored.rememberPanel !== false;
   state.collapsed = Boolean(stored.collapsed);
-  state.debugEnabled = stored.debugEnabled !== false;
   state.panelX = typeof stored.panelX === "number" ? stored.panelX : null;
   state.panelY = typeof stored.panelY === "number" ? stored.panelY : 88;
+  state.panelWidth = typeof stored.panelWidth === "number" ? stored.panelWidth : 348;
+  state.panelHeight = typeof stored.panelHeight === "number" ? stored.panelHeight : 620;
 
   await chrome.storage.local.set({
     sessionId: state.sessionId,
@@ -86,9 +89,10 @@ async function init() {
     role: state.role,
     speechEnabled: state.speechEnabled,
     rememberPanel: state.rememberPanel,
-    debugEnabled: state.debugEnabled,
     panelX: state.panelX,
     panelY: state.panelY,
+    panelWidth: state.panelWidth,
+    panelHeight: state.panelHeight,
     collapsed: state.collapsed,
   });
 
@@ -140,10 +144,7 @@ function buildPanel() {
             <span>记住面板位置和最小化状态</span>
             <input data-role="rememberPanel" type="checkbox" />
           </label>
-          <label class="bt-toggle">
-            <span>显示调试日志</span>
-            <input data-role="debugEnabled" type="checkbox" />
-          </label>
+          <button class="bt-export-btn" data-role="exportLog" type="button">导出日志文件</button>
         </div>
         <div class="bt-field">
           <label>房间秘钥</label>
@@ -177,13 +178,6 @@ function buildPanel() {
           <input data-role="chatInput" placeholder="发送一条消息" maxlength="500" />
           <button type="submit">发送</button>
         </form>
-        <div class="bt-debug" data-role="debugPanel">
-          <div class="bt-debug-head">
-            <span>调试日志</span>
-            <button data-role="clearDebug" type="button">清空</button>
-          </div>
-          <div class="bt-debug-list" data-role="debugList"></div>
-        </div>
       </div>
     </div>
   `;
@@ -203,12 +197,9 @@ function buildPanel() {
   elements.settingsPanel = root.querySelector('[data-role="settingsPanel"]');
   elements.speechEnabled = root.querySelector('[data-role="speechEnabled"]');
   elements.rememberPanel = root.querySelector('[data-role="rememberPanel"]');
-  elements.debugEnabled = root.querySelector('[data-role="debugEnabled"]');
   elements.chatList = root.querySelector('[data-role="chatList"]');
   elements.chatForm = root.querySelector('[data-role="chatForm"]');
   elements.chatInput = root.querySelector('[data-role="chatInput"]');
-  elements.debugPanel = root.querySelector('[data-role="debugPanel"]');
-  elements.debugList = root.querySelector('[data-role="debugList"]');
 
   root.querySelector('[data-role="hide"]').addEventListener("click", () => {
     state.panelVisible = false;
@@ -244,20 +235,14 @@ function buildPanel() {
     if (!state.rememberPanel) {
       state.panelX = null;
       state.panelY = 88;
+      state.panelWidth = 348;
+      state.panelHeight = 620;
       state.collapsed = false;
     }
     await persistUiState();
     render();
   });
-  elements.debugEnabled.addEventListener("change", async () => {
-    state.debugEnabled = elements.debugEnabled.checked;
-    await persistUiState();
-    render();
-  });
-  root.querySelector('[data-role="clearDebug"]').addEventListener("click", () => {
-    state.debugLogs = [];
-    renderDebugLogs();
-  });
+  root.querySelector('[data-role="exportLog"]').addEventListener("click", exportDebugLog);
 
   root.querySelector('[data-role="save"]').addEventListener("click", saveSettings);
   root.querySelector('[data-role="syncNow"]').addEventListener("click", syncCurrentVideoState);
@@ -280,6 +265,8 @@ function render() {
   elements.panel.style.left = state.panelX == null ? "auto" : `${state.panelX}px`;
   elements.panel.style.right = state.panelX == null ? "20px" : "auto";
   elements.panel.style.top = `${state.panelY}px`;
+  elements.panel.style.width = `${state.panelWidth}px`;
+  elements.panel.style.height = `${state.panelHeight}px`;
   elements.miniLauncher.style.left = state.panelX == null ? "auto" : `${state.panelX}px`;
   elements.miniLauncher.style.right = state.panelX == null ? "20px" : "auto";
   elements.miniLauncher.style.top = `${state.panelY}px`;
@@ -290,7 +277,6 @@ function render() {
   elements.roleBadge.textContent = state.role === "host" ? "主人模式" : "客人模式";
   elements.speechEnabled.checked = state.speechEnabled;
   elements.rememberPanel.checked = state.rememberPanel;
-  elements.debugEnabled.checked = state.debugEnabled;
   elements.settingsPanel.style.display = state.settingsOpen ? "flex" : "none";
   elements.body.style.display = state.collapsed ? "none" : "flex";
   root.querySelector('[data-role="collapse"]').textContent = state.collapsed ? "+" : "-";
@@ -298,12 +284,10 @@ function render() {
   elements.status.textContent = state.isConnected ? `${roleText(state.role)}已连接` : elements.status.textContent;
   elements.presence.textContent = `在线人数：${state.users.length}/2`;
   elements.chatInput.disabled = !state.isConnected;
-  elements.debugPanel.style.display = state.debugEnabled ? "flex" : "none";
   elements.hint.textContent =
     state.role === "host"
       ? "你是主人。你在 B 站里的页面切换、播放、暂停和拖动会驱动客人。"
       : "你是客人。你会跟随主人在 B 站里的页面和视频状态。";
-  renderDebugLogs();
 }
 
 async function saveSettings() {
@@ -320,9 +304,10 @@ async function saveSettings() {
     role: state.role,
     speechEnabled: state.speechEnabled,
     rememberPanel: state.rememberPanel,
-    debugEnabled: state.debugEnabled,
     panelX: state.rememberPanel ? state.panelX : null,
     panelY: state.rememberPanel ? state.panelY : 88,
+    panelWidth: state.rememberPanel ? state.panelWidth : 348,
+    panelHeight: state.rememberPanel ? state.panelHeight : 620,
     collapsed: state.rememberPanel ? state.collapsed : false,
   });
 
@@ -857,6 +842,20 @@ function initDrag() {
 
   elements.dragHandle.addEventListener("pointerup", stopDrag);
   elements.dragHandle.addEventListener("pointercancel", stopDrag);
+
+  const resizeObserver = new ResizeObserver(() => {
+    if (state.collapsed) {
+      return;
+    }
+
+    const rect = elements.panel.getBoundingClientRect();
+    state.panelWidth = Math.round(rect.width);
+    state.panelHeight = Math.round(rect.height);
+    if (state.rememberPanel) {
+      persistUiState();
+    }
+  });
+  resizeObserver.observe(elements.panel);
 }
 
 function sendToBackground(payload) {
@@ -897,10 +896,11 @@ async function persistUiState() {
   await chrome.storage.local.set({
     panelX: state.rememberPanel ? state.panelX : null,
     panelY: state.rememberPanel ? state.panelY : 88,
+    panelWidth: state.rememberPanel ? state.panelWidth : 348,
+    panelHeight: state.rememberPanel ? state.panelHeight : 620,
     collapsed: state.rememberPanel ? state.collapsed : false,
     rememberPanel: state.rememberPanel,
     speechEnabled: state.speechEnabled,
-    debugEnabled: state.debugEnabled,
   });
 }
 
@@ -967,25 +967,6 @@ function addDebugLog(tag, text) {
   };
   state.debugLogs.unshift(entry);
   state.debugLogs = state.debugLogs.slice(0, 40);
-  renderDebugLogs();
-}
-
-function renderDebugLogs() {
-  if (!elements.debugList) {
-    return;
-  }
-
-  if (!state.debugEnabled) {
-    elements.debugList.innerHTML = "";
-    return;
-  }
-
-  elements.debugList.innerHTML = state.debugLogs
-    .map(
-      (item) =>
-        `<div class="bt-debug-item"><span class="bt-debug-time">${escapeHtml(item.at)}</span><strong>${escapeHtml(item.tag)}</strong><span>${escapeHtml(item.text)}</span></div>`
-    )
-    .join("");
 }
 
 function shortUrl(url) {
@@ -999,4 +980,27 @@ function shortUrl(url) {
 
 function describeVideo(video) {
   return `video ${video.clientWidth}x${video.clientHeight} paused=${video.paused} time=${video.currentTime.toFixed(2)}`;
+}
+
+function exportDebugLog() {
+  const lines = [
+    `时间: ${new Date().toLocaleString()}`,
+    `身份: ${roleText(state.role)}`,
+    `房间: ${state.sessionId || "(空)"}`,
+    `页面: ${location.href}`,
+    "",
+    ...state.debugLogs.map((item) => `[${item.at}] ${item.tag} ${item.text}`),
+  ];
+
+  chrome.runtime.sendMessage({
+    type: "bt:download-log",
+    filename: `bilibili-together-log-${createTimestamp()}.txt`,
+    content: lines.join("\n"),
+  });
+}
+
+function createTimestamp() {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 }
