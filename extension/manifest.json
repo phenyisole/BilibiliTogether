@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Bilibili Together MVP",
+  "version": "0.1.0",
+  "description": "Two-person synchronized watch and chat for Bilibili web videos.",
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.bilibili.com/*",
+    "https://*.bilibili.com/*",
+    "http://localhost:8787/*",
+    "ws://localhost:8787/*",
+    "ws://106.53.151.206/*",
+    "wss://106.53.151.206/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Bilibili Together"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.bilibili.com/video/*",
+        "https://www.bilibili.com/list/*",
+        "https://www.bilibili.com/bangumi/play/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "panel.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,136 @@
+#bt-root {
+  all: initial;
+  position: fixed;
+  top: 88px;
+  right: 20px;
+  width: 320px;
+  max-height: calc(100vh - 120px);
+  z-index: 2147483647;
+  font-family: "Segoe UI", sans-serif;
+}
+
+#bt-root * {
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.bt-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(18, 18, 24, 0.92);
+  color: #fff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+}
+
+.bt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, #00a1d6, #fb7299);
+  color: #fff;
+}
+
+.bt-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.bt-status {
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.bt-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.bt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.bt-field label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.bt-field input {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.bt-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bt-actions button,
+.bt-chat-form button {
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: #00a1d6;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.bt-actions .secondary {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.bt-presence,
+.bt-hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.bt-chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 140px;
+  max-height: 260px;
+  padding: 2px;
+  overflow-y: auto;
+}
+
+.bt-chat-item {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.bt-chat-item strong {
+  color: #7dd8ff;
+}
+
+.bt-chat-form {
+  display: flex;
+  gap: 8px;
+}
+
+.bt-chat-form input {
+  flex: 1;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
