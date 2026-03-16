@@ -12,6 +12,8 @@ const state = {
   lastUrl: location.href,
   lastSyncAt: 0,
   lastSentSignature: "",
+  recentChatKeys: new Set(),
+  reconnectTimer: null,
 };
 
 const elements = {};
@@ -124,6 +126,7 @@ function render() {
   elements.nickname.value = state.nickname;
   elements.status.textContent = state.isConnected ? "Connected" : "Disconnected";
   elements.presence.textContent = `Peers: ${state.users.length}/2`;
+  elements.chatInput.disabled = !state.isConnected;
 }
 
 async function saveSettings() {
@@ -154,9 +157,15 @@ function connect(forceReconnect = false) {
   const ws = new WebSocket(state.serverUrl);
   state.ws = ws;
   setStatus(false, "Connecting...");
+  render();
 
   ws.addEventListener("open", () => {
     setStatus(true, "Connected");
+    if (state.reconnectTimer) {
+      clearTimeout(state.reconnectTimer);
+      state.reconnectTimer = null;
+    }
+    render();
     ws.send(
       JSON.stringify({
         type: "join",
@@ -179,7 +188,8 @@ function connect(forceReconnect = false) {
 
   ws.addEventListener("close", () => {
     setStatus(false, "Disconnected");
-    window.setTimeout(() => {
+    render();
+    state.reconnectTimer = window.setTimeout(() => {
       if (state.ws === ws) {
         connect();
       }
@@ -188,6 +198,7 @@ function connect(forceReconnect = false) {
 
   ws.addEventListener("error", () => {
     setStatus(false, "Connection error");
+    render();
   });
 }
 
@@ -195,6 +206,7 @@ function handleServerMessage(message) {
   if (message.type === "joined") {
     state.users = message.users || [];
     render();
+    clearChatIfFreshJoin();
     appendSystemMessage(`Joined session ${message.sessionId}`);
     if (Array.isArray(message.chatHistory)) {
       for (const item of message.chatHistory) {
@@ -246,6 +258,9 @@ function handleServerMessage(message) {
 
   if (message.type === "error") {
     appendSystemMessage(`Server error: ${message.message}`);
+    if (message.message === "room_full" && state.ws) {
+      state.ws.close();
+    }
   }
 }
 
@@ -269,6 +284,16 @@ function appendChatMessage(message) {
     return;
   }
 
+  const key = `${message.senderId || message.nickname}-${message.sentAt}-${message.text}`;
+  if (state.recentChatKeys.has(key)) {
+    return;
+  }
+  state.recentChatKeys.add(key);
+  if (state.recentChatKeys.size > 100) {
+    const firstKey = state.recentChatKeys.values().next().value;
+    state.recentChatKeys.delete(firstKey);
+  }
+
   const item = document.createElement("div");
   item.className = "bt-chat-item";
   const time = new Date(message.sentAt || Date.now()).toLocaleTimeString();
@@ -287,6 +312,7 @@ function sendChatMessage() {
   const payload = { type: "chat_message", text };
   state.ws.send(JSON.stringify(payload));
   appendChatMessage({
+    senderId: state.clientId,
     nickname: `${state.nickname} (You)`,
     text,
     sentAt: Date.now(),
@@ -350,6 +376,9 @@ function installHistoryHooks() {
 
 function sendNavigate(url) {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+    return;
+  }
+  if (!isBilibiliWatchUrl(url)) {
     return;
   }
   state.ws.send(JSON.stringify({ type: "navigate", url }));
@@ -427,6 +456,9 @@ function applyRemoteVideoState(message) {
 }
 
 function navigateTo(url) {
+  if (!isBilibiliWatchUrl(url)) {
+    return;
+  }
   state.suppressUntil = Date.now() + 3000;
   location.href = url;
 }
@@ -450,4 +482,12 @@ function escapeHtml(input) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function clearChatIfFreshJoin() {
+  const existingItems = elements.chatList.querySelectorAll(".bt-chat-item");
+  if (existingItems.length > 60) {
+    elements.chatList.innerHTML = "";
+    state.recentChatKeys.clear();
+  }
 }

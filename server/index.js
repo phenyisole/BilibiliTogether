@@ -4,6 +4,7 @@ import { WebSocketServer } from "ws";
 const port = Number(process.env.PORT || 8787);
 const maxRoomSize = 2;
 const rooms = new Map();
+const heartbeatIntervalMs = 30000;
 
 function getRoom(sessionId) {
   if (!rooms.has(sessionId)) {
@@ -22,6 +23,13 @@ function safeSend(ws, payload) {
   if (ws.readyState === ws.OPEN) {
     ws.send(JSON.stringify(payload));
   }
+}
+
+function roomUsers(room) {
+  return Array.from(room.clients.values()).map((client) => ({
+    clientId: client.clientId,
+    nickname: client.nickname,
+  }));
 }
 
 function broadcast(sessionId, payload, exceptClientId = null) {
@@ -44,15 +52,10 @@ function emitPresence(sessionId) {
     return;
   }
 
-  const users = Array.from(room.clients.values()).map((client) => ({
-    clientId: client.clientId,
-    nickname: client.nickname,
-  }));
-
   broadcast(sessionId, {
     type: "presence",
     sessionId,
-    users,
+    users: roomUsers(room),
   });
 }
 
@@ -83,6 +86,7 @@ const wss = new WebSocketServer({ server });
 wss.on("connection", (ws) => {
   let joinedSessionId = null;
   let joinedClientId = null;
+  ws.isAlive = true;
 
   safeSend(ws, {
     type: "hello",
@@ -115,6 +119,13 @@ wss.on("connection", (ws) => {
         return;
       }
 
+      if (joinedSessionId && joinedClientId && (joinedSessionId !== sessionId || joinedClientId !== clientId)) {
+        const previousRoom = rooms.get(joinedSessionId);
+        previousRoom?.clients.delete(joinedClientId);
+        emitPresence(joinedSessionId);
+        cleanupRoom(joinedSessionId);
+      }
+
       joinedSessionId = sessionId;
       joinedClientId = clientId;
 
@@ -128,10 +139,7 @@ wss.on("connection", (ws) => {
         type: "joined",
         sessionId,
         clientId,
-        users: Array.from(room.clients.values()).map((client) => ({
-          clientId: client.clientId,
-          nickname: client.nickname,
-        })),
+        users: roomUsers(room),
         lastVideoState: room.lastVideoState,
         lastNavigate: room.lastNavigate,
         chatHistory: room.chatHistory.slice(-30),
@@ -195,12 +203,17 @@ wss.on("connection", (ws) => {
     }
 
     if (data.type === "chat_message") {
+      const text = String(data.text || "").trim().slice(0, 500);
+      if (!text) {
+        return;
+      }
+
       const message = {
         type: "chat_message",
         sessionId: joinedSessionId,
         senderId: joinedClientId,
         nickname: room.clients.get(joinedClientId)?.nickname || "Guest",
-        text: String(data.text || "").slice(0, 500),
+        text,
         sentAt: Date.now(),
       };
 
@@ -232,6 +245,26 @@ wss.on("connection", (ws) => {
     emitPresence(joinedSessionId);
     cleanupRoom(joinedSessionId);
   });
+
+  ws.on("pong", () => {
+    ws.isAlive = true;
+  });
+});
+
+const heartbeat = setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.isAlive === false) {
+      ws.terminate();
+      continue;
+    }
+
+    ws.isAlive = false;
+    ws.ping();
+  }
+}, heartbeatIntervalMs);
+
+wss.on("close", () => {
+  clearInterval(heartbeat);
 });
 
 server.listen(port, () => {

@@ -31,6 +31,21 @@ npm run dev
 2. 开启开发者模式
 3. 选择“加载已解压的扩展程序”
 4. 选中 `extension/`
+5. 点击扩展图标，在 B 站视频页打开侧边面板
+
+## 部署到 Chrome
+
+如果你只是想先装到 Chrome 里自己和朋友测试，直接用“加载已解压的扩展程序”就行。
+
+如果你后面想正式发到 Chrome Web Store，大致流程是：
+
+1. 把 `extension/` 目录单独打成 zip
+2. 注册 Chrome Web Store Developer
+3. 新建扩展项目并上传 zip
+4. 补齐图标、截图、描述和隐私说明
+5. 提交审核
+
+MVP 阶段建议先用本地加载，最快。
 
 ## 使用方式
 
@@ -72,6 +87,19 @@ pm2 startup
 ```
 
 Nginx 可以后续再反代到 `8787`，并加上域名和 HTTPS/WSS。
+
+## 已部署服务器
+
+当前服务地址：
+
+- `http://106.53.151.206/healthz`
+- `ws://106.53.151.206:8787`
+
+服务器运行方式：
+
+- 项目目录：`/home/ubuntu/BilibiliTogether`
+- PM2 进程名：`bilibili-together`
+- Nginx 80 端口反代到 `127.0.0.1:8787`
 
 ## 当前已知限制
 
