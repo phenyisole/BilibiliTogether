@@ -119,10 +119,14 @@ async function init() {
 
 function buildPanel() {
   root.innerHTML = `
-    <button class="bt-mini-launcher" data-role="miniLauncher" type="button">一起看</button>
+    <button class="bt-mini-launcher" data-role="miniLauncher" type="button">
+      <span class="bt-mini-dot"></span>
+      <span class="bt-mini-text">一起看</span>
+    </button>
     <div class="bt-panel" style="display:${state.panelVisible ? "flex" : "none"}">
       <div class="bt-header" data-role="dragHandle">
-        <div>
+        <div class="bt-header-copy">
+          <div class="bt-kicker">Bilibili watch party</div>
           <div class="bt-title">Bilibili Together</div>
           <div class="bt-status" data-role="status">请输入房间秘钥</div>
         </div>
@@ -175,8 +179,10 @@ function buildPanel() {
           <button data-role="syncNow" class="secondary">主人同步</button>
           <button data-role="leave" class="secondary">退出房间</button>
         </div>
-        <div class="bt-presence" data-role="presence">在线人数：0/2</div>
-        <div class="bt-hint" data-role="hint">主人控制页面跟随、播放、暂停和拖动，客人只负责跟随。</div>
+        <div class="bt-meta-card">
+          <div class="bt-presence" data-role="presence">在线人数：0/2</div>
+          <div class="bt-hint" data-role="hint">主人控制页面跟随、播放、暂停和拖动，客人只负责跟随。</div>
+        </div>
         <div class="bt-chat-list" data-role="chatList"></div>
         <form class="bt-chat-form" data-role="chatForm">
           <input data-role="chatInput" placeholder="发送一条消息" maxlength="500" />
@@ -206,8 +212,7 @@ function buildPanel() {
   elements.chatInput = root.querySelector('[data-role="chatInput"]');
 
   root.querySelector('[data-role="hide"]').addEventListener("click", () => {
-    state.panelVisible = false;
-    render();
+    leaveRoom({ hidePanel: true });
   });
 
   root.querySelector('[data-role="collapse"]').addEventListener("click", () => {
@@ -266,7 +271,7 @@ function render() {
   }
 
   elements.panel.style.display = state.panelVisible ? "flex" : "none";
-  elements.miniLauncher.style.display = state.panelVisible && state.collapsed ? "flex" : "none";
+  elements.miniLauncher.style.display = !state.panelVisible || state.collapsed ? "inline-flex" : "none";
   elements.panel.style.left = state.panelX == null ? "auto" : `${state.panelX}px`;
   elements.panel.style.right = state.panelX == null ? "20px" : "auto";
   elements.panel.style.top = `${state.panelY}px`;
@@ -343,7 +348,8 @@ function connect() {
   });
 }
 
-async function leaveRoom() {
+async function leaveRoom(options = {}) {
+  const { hidePanel = false } = options;
   addDebugLog("leave", `退出房间 ${state.sessionId || "(空)"}`);
   chrome.runtime.sendMessage({ type: "bt:disconnect" });
   state.isConnected = false;
@@ -356,6 +362,8 @@ async function leaveRoom() {
   state.chatListClearedAt = Date.now();
   clearChatIfFreshJoin(true);
   setStatus(false, "已退出房间");
+  state.panelVisible = !hidePanel;
+  state.collapsed = false;
   await chrome.storage.local.set({
     sessionId: "",
     nickname: state.nickname,
