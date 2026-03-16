@@ -10,6 +10,12 @@ const STORAGE_KEYS = [
   "panelY",
   "collapsed",
 ];
+const VIDEO_SELECTORS = [
+  ".bpx-player-video-wrap video",
+  ".bilibili-player-video video",
+  ".bpx-player-container video",
+  "video",
+];
 const state = {
   ws: null,
   sessionId: "",
@@ -294,7 +300,6 @@ async function saveSettings() {
     return;
   }
 
-  appendSystemMessage(`正在以${roleText(state.role)}身份加入房间 ${state.sessionId}`);
   connect();
 }
 
@@ -322,7 +327,6 @@ function handleServerMessage(message) {
     setStatus(true, `${roleText(state.role)}已连接`);
     render();
     clearChatIfFreshJoin();
-    appendSystemMessage(`已进入房间 ${message.sessionId}`);
 
     if (Array.isArray(message.chatHistory)) {
       for (const item of message.chatHistory) {
@@ -353,12 +357,13 @@ function handleServerMessage(message) {
   }
 
   if (message.type === "peer_joined") {
-    appendSystemMessage(`${message.nickname || "对方"}以${roleText(message.role || "guest")}身份加入了房间`);
+    appendPresenceMessage(message.nickname || "对方", "加入了房间");
     return;
   }
 
   if (message.type === "peer_left") {
-    appendSystemMessage("对方已离开");
+    const leavingUser = state.users.find((user) => user.clientId === message.clientId);
+    appendPresenceMessage(leavingUser?.nickname || "对方", "离开了房间");
     return;
   }
 
@@ -371,7 +376,6 @@ function handleServerMessage(message) {
 
   if (message.type === "navigate") {
     if (state.role === "guest" && message.senderId === state.hostClientId && message.url && message.url !== location.href) {
-      appendSystemMessage("正在跟随主人切换到新的 B 站页面");
       navigateTo(message.url);
     }
     return;
@@ -392,7 +396,7 @@ function handleServerMessage(message) {
       host_only: "只有主人可以控制同步",
       join_required: "请先进入房间",
     };
-    appendSystemMessage(`服务器：${messageMap[message.message] || message.message}`);
+    setStatus(false, messageMap[message.message] || "连接异常");
     if ((message.message === "room_full" || message.message === "host_taken") && state.ws) {
       state.ws.close();
     }
@@ -413,6 +417,17 @@ function appendSystemMessage(text) {
     text,
     sentAt: Date.now(),
   }, { speak: false });
+}
+
+function appendPresenceMessage(nickname, actionText) {
+  appendChatMessage(
+    {
+      nickname,
+      text: actionText,
+      sentAt: Date.now(),
+    },
+    { speak: false }
+  );
 }
 
 function appendChatMessage(message, options = {}) {
@@ -563,6 +578,13 @@ function startGuestEnforceLoop() {
     if (!state.lastRemoteVideoState.paused && video.paused && Date.now() > state.suppressUntil) {
       state.suppressUntil = Date.now() + 600;
       video.play().catch(() => {});
+      return;
+    }
+
+    const remoteTime = Number(state.lastRemoteVideoState.currentTime || 0);
+    if (Math.abs(video.currentTime - remoteTime) > 1.2 && Date.now() > state.suppressUntil) {
+      state.suppressUntil = Date.now() + 600;
+      video.currentTime = remoteTime;
     }
   }, 900);
 }
@@ -698,7 +720,20 @@ function navigateTo(url) {
 }
 
 function getVideoElement() {
-  return document.querySelector("video");
+  const candidates = VIDEO_SELECTORS.flatMap((selector) => Array.from(document.querySelectorAll(selector)));
+  const unique = [...new Set(candidates)];
+
+  if (unique.length === 0) {
+    return null;
+  }
+
+  return unique
+    .filter((video) => video instanceof HTMLVideoElement)
+    .sort((a, b) => {
+      const areaA = (a.clientWidth || 0) * (a.clientHeight || 0);
+      const areaB = (b.clientWidth || 0) * (b.clientHeight || 0);
+      return areaB - areaA;
+    })[0] || null;
 }
 
 function createDefaultNickname() {
@@ -796,7 +831,7 @@ function maybeSpeakMessage(message) {
     null;
 
   window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(`${message.nickname}说，${message.text}`);
+  const utterance = new SpeechSynthesisUtterance(`${message.text}`);
   utterance.lang = "zh-CN";
   if (preferredVoice) {
     utterance.voice = preferredVoice;
