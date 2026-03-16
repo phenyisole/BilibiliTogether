@@ -1,10 +1,12 @@
-const STORAGE_KEYS = ["serverUrl", "sessionId", "nickname", "clientId"];
+const SERVER_URL = "ws://106.53.151.206:8787";
+const STORAGE_KEYS = ["sessionId", "nickname", "clientId", "role"];
 const state = {
   ws: null,
-  serverUrl: "",
   sessionId: "",
   nickname: "",
   clientId: "",
+  role: "guest",
+  hostClientId: null,
   isConnected: false,
   users: [],
   panelVisible: true,
@@ -34,22 +36,29 @@ chrome.runtime.onMessage.addListener((message) => {
 
 async function init() {
   const stored = await chrome.storage.local.get(STORAGE_KEYS);
-  state.serverUrl = stored.serverUrl || "ws://106.53.151.206:8787";
-  state.sessionId = stored.sessionId || "demo-room";
+  state.sessionId = stored.sessionId || "";
   state.nickname = stored.nickname || createDefaultNickname();
   state.clientId = stored.clientId || crypto.randomUUID();
+  state.role = stored.role === "host" ? "host" : "guest";
+
   await chrome.storage.local.set({
-    serverUrl: state.serverUrl,
     sessionId: state.sessionId,
     nickname: state.nickname,
     clientId: state.clientId,
+    role: state.role,
   });
 
   buildPanel();
   installHistoryHooks();
   watchVideo();
   startUrlWatcher();
-  connect();
+
+  if (state.sessionId) {
+    connect();
+  } else {
+    setStatus(false, "Enter key to start");
+    render();
+  }
 }
 
 function buildPanel() {
@@ -58,29 +67,38 @@ function buildPanel() {
       <div class="bt-header">
         <div>
           <div class="bt-title">Bilibili Together</div>
-          <div class="bt-status" data-role="status">Connecting...</div>
+          <div class="bt-status" data-role="status">Enter key to start</div>
         </div>
         <button data-role="hide" style="all:unset;cursor:pointer;font-size:18px;line-height:1;">×</button>
       </div>
       <div class="bt-body">
         <div class="bt-field">
-          <label>Server</label>
-          <input data-role="serverUrl" />
-        </div>
-        <div class="bt-field">
-          <label>Session</label>
-          <input data-role="sessionId" />
+          <label>Room Key</label>
+          <input data-role="sessionId" placeholder="example: room-001" />
         </div>
         <div class="bt-field">
           <label>Nickname</label>
           <input data-role="nickname" />
         </div>
+        <div class="bt-field">
+          <label>Role</label>
+          <div class="bt-role-row">
+            <label class="bt-role-option">
+              <input data-role="hostRadio" type="radio" name="bt-role" value="host" />
+              <span>Host</span>
+            </label>
+            <label class="bt-role-option">
+              <input data-role="guestRadio" type="radio" name="bt-role" value="guest" />
+              <span>Guest</span>
+            </label>
+          </div>
+        </div>
         <div class="bt-actions">
-          <button data-role="save">Save & Reconnect</button>
-          <button data-role="syncNow" class="secondary">Sync Now</button>
+          <button data-role="save">Join Room</button>
+          <button data-role="syncNow" class="secondary">Host Sync</button>
         </div>
         <div class="bt-presence" data-role="presence">Peers: 0/2</div>
-        <div class="bt-hint">当前页视频会自动跟随对方的播放状态与页面跳转。</div>
+        <div class="bt-hint" data-role="hint">Host controls page follow, play, pause and seek. Guest only follows.</div>
         <div class="bt-chat-list" data-role="chatList"></div>
         <form class="bt-chat-form" data-role="chatForm">
           <input data-role="chatInput" placeholder="Send a message" maxlength="500" />
@@ -92,10 +110,12 @@ function buildPanel() {
 
   elements.panel = root.querySelector(".bt-panel");
   elements.status = root.querySelector('[data-role="status"]');
-  elements.serverUrl = root.querySelector('[data-role="serverUrl"]');
   elements.sessionId = root.querySelector('[data-role="sessionId"]');
   elements.nickname = root.querySelector('[data-role="nickname"]');
+  elements.hostRadio = root.querySelector('[data-role="hostRadio"]');
+  elements.guestRadio = root.querySelector('[data-role="guestRadio"]');
   elements.presence = root.querySelector('[data-role="presence"]');
+  elements.hint = root.querySelector('[data-role="hint"]');
   elements.chatList = root.querySelector('[data-role="chatList"]');
   elements.chatForm = root.querySelector('[data-role="chatForm"]');
   elements.chatInput = root.querySelector('[data-role="chatInput"]');
@@ -121,31 +141,46 @@ function render() {
   }
 
   elements.panel.style.display = state.panelVisible ? "flex" : "none";
-  elements.serverUrl.value = state.serverUrl;
   elements.sessionId.value = state.sessionId;
   elements.nickname.value = state.nickname;
-  elements.status.textContent = state.isConnected ? "Connected" : "Disconnected";
+  elements.hostRadio.checked = state.role === "host";
+  elements.guestRadio.checked = state.role !== "host";
+  elements.status.textContent = state.isConnected ? `${capitalizeRole(state.role)} connected` : elements.status.textContent;
   elements.presence.textContent = `Peers: ${state.users.length}/2`;
   elements.chatInput.disabled = !state.isConnected;
+  elements.hint.textContent =
+    state.role === "host"
+      ? "You are host. Your Bilibili page, play, pause and seek will drive the guest."
+      : "You are guest. You will follow the host on any Bilibili page and video state.";
 }
 
 async function saveSettings() {
-  state.serverUrl = elements.serverUrl.value.trim();
-  state.sessionId = elements.sessionId.value.trim() || "demo-room";
+  state.sessionId = elements.sessionId.value.trim();
   state.nickname = elements.nickname.value.trim() || createDefaultNickname();
+  state.role = elements.hostRadio.checked ? "host" : "guest";
 
   await chrome.storage.local.set({
-    serverUrl: state.serverUrl,
     sessionId: state.sessionId,
     nickname: state.nickname,
     clientId: state.clientId,
+    role: state.role,
   });
 
-  appendSystemMessage("Settings saved, reconnecting...");
+  if (!state.sessionId) {
+    setStatus(false, "Room key required");
+    render();
+    return;
+  }
+
+  appendSystemMessage(`Joining ${state.sessionId} as ${capitalizeRole(state.role)}`);
   connect(true);
 }
 
 function connect(forceReconnect = false) {
+  if (!state.sessionId) {
+    return;
+  }
+
   if (forceReconnect && state.ws) {
     state.ws.close();
   }
@@ -154,13 +189,13 @@ function connect(forceReconnect = false) {
     return;
   }
 
-  const ws = new WebSocket(state.serverUrl);
+  const ws = new WebSocket(SERVER_URL);
   state.ws = ws;
   setStatus(false, "Connecting...");
   render();
 
   ws.addEventListener("open", () => {
-    setStatus(true, "Connected");
+    setStatus(true, `${capitalizeRole(state.role)} connected`);
     if (state.reconnectTimer) {
       clearTimeout(state.reconnectTimer);
       state.reconnectTimer = null;
@@ -172,6 +207,7 @@ function connect(forceReconnect = false) {
         sessionId: state.sessionId,
         clientId: state.clientId,
         nickname: state.nickname,
+        role: state.role,
       })
     );
   });
@@ -187,10 +223,10 @@ function connect(forceReconnect = false) {
   });
 
   ws.addEventListener("close", () => {
-    setStatus(false, "Disconnected");
+    setStatus(false, state.sessionId ? "Disconnected, retrying..." : "Disconnected");
     render();
     state.reconnectTimer = window.setTimeout(() => {
-      if (state.ws === ws) {
+      if (state.ws === ws && state.sessionId) {
         connect();
       }
     }, 2000);
@@ -205,31 +241,42 @@ function connect(forceReconnect = false) {
 function handleServerMessage(message) {
   if (message.type === "joined") {
     state.users = message.users || [];
+    state.hostClientId = message.hostClientId || null;
+    setStatus(true, `${capitalizeRole(state.role)} connected`);
     render();
     clearChatIfFreshJoin();
-    appendSystemMessage(`Joined session ${message.sessionId}`);
+    appendSystemMessage(`Joined room ${message.sessionId}`);
+
     if (Array.isArray(message.chatHistory)) {
       for (const item of message.chatHistory) {
         appendChatMessage(item);
       }
     }
-    if (message.lastNavigate?.url && message.lastNavigate.url !== location.href) {
-      navigateTo(message.lastNavigate.url);
-    }
-    if (message.lastVideoState) {
-      applyRemoteVideoState(message.lastVideoState);
+
+    if (state.role === "host") {
+      sendNavigate(location.href);
+      syncCurrentVideoState();
+    } else {
+      if (message.lastNavigate?.url && message.lastNavigate.url !== location.href) {
+        navigateTo(message.lastNavigate.url);
+      }
+      if (message.lastVideoState) {
+        applyRemoteVideoState(message.lastVideoState);
+      }
     }
     return;
   }
 
   if (message.type === "presence") {
     state.users = message.users || [];
+    const hostUser = state.users.find((user) => user.role === "host");
+    state.hostClientId = hostUser?.clientId || null;
     render();
     return;
   }
 
   if (message.type === "peer_joined") {
-    appendSystemMessage(`${message.nickname || "Peer"} joined`);
+    appendSystemMessage(`${message.nickname || "Peer"} joined as ${capitalizeRole(message.role || "guest")}`);
     return;
   }
 
@@ -244,21 +291,29 @@ function handleServerMessage(message) {
   }
 
   if (message.type === "navigate") {
-    if (message.url && message.url !== location.href) {
-      appendSystemMessage("Following peer to a new video page");
+    if (state.role === "guest" && message.senderId === state.hostClientId && message.url && message.url !== location.href) {
+      appendSystemMessage("Following host to another Bilibili page");
       navigateTo(message.url);
     }
     return;
   }
 
   if (message.type === "video_state") {
-    applyRemoteVideoState(message);
+    if (state.role === "guest" && message.senderId === state.hostClientId) {
+      applyRemoteVideoState(message);
+    }
     return;
   }
 
   if (message.type === "error") {
-    appendSystemMessage(`Server error: ${message.message}`);
-    if (message.message === "room_full" && state.ws) {
+    const messageMap = {
+      room_full: "Room is full",
+      host_taken: "Host already exists in this room",
+      host_only: "Only host can control sync",
+      join_required: "Join a room first",
+    };
+    appendSystemMessage(`Server: ${messageMap[message.message] || message.message}`);
+    if ((message.message === "room_full" || message.message === "host_taken") && state.ws) {
       state.ws.close();
     }
   }
@@ -309,8 +364,7 @@ function sendChatMessage() {
   }
 
   elements.chatInput.value = "";
-  const payload = { type: "chat_message", text };
-  state.ws.send(JSON.stringify(payload));
+  state.ws.send(JSON.stringify({ type: "chat_message", text }));
   appendChatMessage({
     senderId: state.clientId,
     nickname: `${state.nickname} (You)`,
@@ -345,13 +399,15 @@ function startUrlWatcher() {
       const oldUrl = state.lastUrl;
       state.lastUrl = newUrl;
 
-      if (Date.now() > state.suppressUntil && isBilibiliWatchUrl(newUrl) && oldUrl !== newUrl) {
+      if (state.role === "host" && Date.now() > state.suppressUntil && isBilibiliUrl(newUrl) && oldUrl !== newUrl) {
         sendNavigate(newUrl);
       }
 
-      setTimeout(() => {
-        syncCurrentVideoState();
-      }, 1500);
+      if (state.role === "host") {
+        setTimeout(() => {
+          syncCurrentVideoState();
+        }, 1500);
+      }
     }
   }, 500);
 }
@@ -375,17 +431,17 @@ function installHistoryHooks() {
 }
 
 function sendNavigate(url) {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+  if (state.role !== "host" || !state.ws || state.ws.readyState !== WebSocket.OPEN) {
     return;
   }
-  if (!isBilibiliWatchUrl(url)) {
+  if (!isBilibiliUrl(url)) {
     return;
   }
   state.ws.send(JSON.stringify({ type: "navigate", url }));
 }
 
 function sendVideoState(action) {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN || Date.now() < state.suppressUntil) {
+  if (state.role !== "host" || !state.ws || state.ws.readyState !== WebSocket.OPEN || Date.now() < state.suppressUntil) {
     return;
   }
 
@@ -414,6 +470,9 @@ function sendVideoState(action) {
 }
 
 function syncCurrentVideoState() {
+  if (state.role !== "host") {
+    return;
+  }
   sendVideoState("sync");
 }
 
@@ -448,7 +507,7 @@ function applyRemoteVideoState(message) {
     let retries = 0;
     const timer = setInterval(() => {
       retries += 1;
-      if (apply() || retries >= 10) {
+      if (apply() || retries >= 12) {
         clearInterval(timer);
       }
     }, 800);
@@ -456,7 +515,7 @@ function applyRemoteVideoState(message) {
 }
 
 function navigateTo(url) {
-  if (!isBilibiliWatchUrl(url)) {
+  if (!isBilibiliUrl(url)) {
     return;
   }
   state.suppressUntil = Date.now() + 3000;
@@ -471,8 +530,8 @@ function createDefaultNickname() {
   return `User-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-function isBilibiliWatchUrl(url) {
-  return /bilibili\.com\/(video|bangumi\/play|list)\//.test(url);
+function isBilibiliUrl(url) {
+  return /^https:\/\/([a-z0-9-]+\.)?bilibili\.com\//i.test(url);
 }
 
 function escapeHtml(input) {
@@ -490,4 +549,8 @@ function clearChatIfFreshJoin() {
     elements.chatList.innerHTML = "";
     state.recentChatKeys.clear();
   }
+}
+
+function capitalizeRole(role) {
+  return role === "host" ? "Host" : "Guest";
 }

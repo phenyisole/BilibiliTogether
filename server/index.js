@@ -10,6 +10,7 @@ function getRoom(sessionId) {
   if (!rooms.has(sessionId)) {
     rooms.set(sessionId, {
       clients: new Map(),
+      hostClientId: null,
       lastVideoState: null,
       lastNavigate: null,
       chatHistory: [],
@@ -29,6 +30,7 @@ function roomUsers(room) {
   return Array.from(room.clients.values()).map((client) => ({
     clientId: client.clientId,
     nickname: client.nickname,
+    role: client.role,
   }));
 }
 
@@ -107,6 +109,7 @@ wss.on("connection", (ws) => {
       const sessionId = String(data.sessionId || "").trim();
       const clientId = String(data.clientId || "").trim();
       const nickname = String(data.nickname || "Guest").slice(0, 24);
+      const role = data.role === "host" ? "host" : "guest";
 
       if (!sessionId || !clientId) {
         safeSend(ws, { type: "error", message: "missing_join_fields" });
@@ -118,12 +121,21 @@ wss.on("connection", (ws) => {
         safeSend(ws, { type: "error", message: "room_full" });
         return;
       }
+      if (role === "host" && room.hostClientId && room.hostClientId !== clientId) {
+        safeSend(ws, { type: "error", message: "host_taken" });
+        return;
+      }
 
       if (joinedSessionId && joinedClientId && (joinedSessionId !== sessionId || joinedClientId !== clientId)) {
         const previousRoom = rooms.get(joinedSessionId);
-        previousRoom?.clients.delete(joinedClientId);
-        emitPresence(joinedSessionId);
-        cleanupRoom(joinedSessionId);
+        if (previousRoom) {
+          previousRoom.clients.delete(joinedClientId);
+          if (previousRoom.hostClientId === joinedClientId) {
+            previousRoom.hostClientId = null;
+          }
+          emitPresence(joinedSessionId);
+          cleanupRoom(joinedSessionId);
+        }
       }
 
       joinedSessionId = sessionId;
@@ -133,12 +145,18 @@ wss.on("connection", (ws) => {
         ws,
         clientId,
         nickname,
+        role,
       });
+      if (role === "host") {
+        room.hostClientId = clientId;
+      }
 
       safeSend(ws, {
         type: "joined",
         sessionId,
         clientId,
+        role,
+        hostClientId: room.hostClientId,
         users: roomUsers(room),
         lastVideoState: room.lastVideoState,
         lastNavigate: room.lastNavigate,
@@ -152,6 +170,7 @@ wss.on("connection", (ws) => {
           sessionId,
           clientId,
           nickname,
+          role,
         },
         clientId
       );
@@ -170,7 +189,15 @@ wss.on("connection", (ws) => {
       return;
     }
 
+    const sender = room.clients.get(joinedClientId);
+    const isHost = room.hostClientId === joinedClientId && sender?.role === "host";
+
     if (data.type === "video_state") {
+      if (!isHost) {
+        safeSend(ws, { type: "error", message: "host_only" });
+        return;
+      }
+
       const payload = {
         type: "video_state",
         sessionId: joinedSessionId,
@@ -189,6 +216,11 @@ wss.on("connection", (ws) => {
     }
 
     if (data.type === "navigate") {
+      if (!isHost) {
+        safeSend(ws, { type: "error", message: "host_only" });
+        return;
+      }
+
       const payload = {
         type: "navigate",
         sessionId: joinedSessionId,
@@ -237,6 +269,9 @@ wss.on("connection", (ws) => {
     }
 
     room.clients.delete(joinedClientId);
+    if (room.hostClientId === joinedClientId) {
+      room.hostClientId = null;
+    }
     broadcast(joinedSessionId, {
       type: "peer_left",
       sessionId: joinedSessionId,
