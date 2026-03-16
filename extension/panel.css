@@ -199,6 +199,7 @@
 .bt-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .bt-role-row {

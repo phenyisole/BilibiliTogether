@@ -173,6 +173,7 @@ function buildPanel() {
         <div class="bt-actions">
           <button data-role="save">进入房间</button>
           <button data-role="syncNow" class="secondary">主人同步</button>
+          <button data-role="leave" class="secondary">退出房间</button>
         </div>
         <div class="bt-presence" data-role="presence">在线人数：0/2</div>
         <div class="bt-hint" data-role="hint">主人控制页面跟随、播放、暂停和拖动，客人只负责跟随。</div>
@@ -249,6 +250,7 @@ function buildPanel() {
 
   root.querySelector('[data-role="save"]').addEventListener("click", saveSettings);
   root.querySelector('[data-role="syncNow"]').addEventListener("click", syncCurrentVideoState);
+  root.querySelector('[data-role="leave"]').addEventListener("click", leaveRoom);
   elements.chatForm.addEventListener("submit", (event) => {
     event.preventDefault();
     sendChatMessage();
@@ -339,6 +341,28 @@ function connect() {
     nickname: state.nickname,
     role: state.role,
   });
+}
+
+async function leaveRoom() {
+  addDebugLog("leave", `退出房间 ${state.sessionId || "(空)"}`);
+  chrome.runtime.sendMessage({ type: "bt:disconnect" });
+  state.isConnected = false;
+  state.ws = null;
+  state.hostClientId = null;
+  state.users = [];
+  state.lastRemoteVideoState = null;
+  state.lastObservedVideoState = null;
+  state.sessionId = "";
+  state.chatListClearedAt = Date.now();
+  clearChatIfFreshJoin(true);
+  setStatus(false, "已退出房间");
+  await chrome.storage.local.set({
+    sessionId: "",
+    nickname: state.nickname,
+    clientId: state.clientId,
+    role: state.role,
+  });
+  render();
 }
 
 function handleServerMessage(message) {
@@ -843,9 +867,9 @@ function escapeHtml(input) {
     .replaceAll("'", "&#39;");
 }
 
-function clearChatIfFreshJoin() {
+function clearChatIfFreshJoin(force = false) {
   const existingItems = elements.chatList.querySelectorAll(".bt-chat-item");
-  if (existingItems.length > 60) {
+  if (force || existingItems.length > 60) {
     elements.chatList.innerHTML = "";
     state.recentChatKeys.clear();
   }
