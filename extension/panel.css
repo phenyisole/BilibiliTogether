@@ -1,5 +1,12 @@
 #bt-root {
   all: initial;
+  --bt-bg: rgba(13, 18, 31, 0.9);
+  --bt-bg-soft: rgba(255, 255, 255, 0.08);
+  --bt-line: rgba(255, 255, 255, 0.12);
+  --bt-text: #f7fbff;
+  --bt-text-muted: rgba(241, 247, 255, 0.74);
+  --bt-accent: #59b7ff;
+  --bt-accent-2: #ff7aa2;
   position: fixed;
   top: 0;
   left: 0;
@@ -16,26 +23,29 @@
 
 .bt-panel {
   position: fixed;
-  width: 320px;
-  height: min(560px, calc(100vh - 120px));
+  width: 348px;
+  height: min(620px, calc(100vh - 88px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-  background: rgba(18, 18, 24, 0.92);
-  color: #fff;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(12px);
+  border: 1px solid var(--bt-line);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top left, rgba(89, 183, 255, 0.16), transparent 34%),
+    radial-gradient(circle at top right, rgba(255, 122, 162, 0.18), transparent 38%),
+    var(--bt-bg);
+  color: var(--bt-text);
+  box-shadow: 0 22px 72px rgba(6, 12, 24, 0.34);
+  backdrop-filter: blur(18px);
 }
 
 .bt-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 14px;
-  background: linear-gradient(135deg, #00a1d6, #fb7299);
-  color: #fff;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(57, 162, 239, 0.88), rgba(255, 114, 153, 0.82));
+  color: var(--bt-text);
   cursor: move;
   user-select: none;
 }
@@ -53,21 +63,22 @@
   width: 22px;
   height: 22px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--bt-text);
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
 }
 
 .bt-title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .bt-status {
   font-size: 12px;
-  opacity: 0.9;
+  opacity: 0.96;
 }
 
 .bt-body {
@@ -75,8 +86,59 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+}
+
+.bt-hero {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bt-hero-chip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(89, 183, 255, 0.14);
+  color: #dff2ff;
+  font-size: 12px;
+  border: 1px solid rgba(89, 183, 255, 0.2);
+}
+
+.bt-hero-chip-muted {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--bt-text-muted);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.bt-settings {
+  display: none;
+  flex-direction: column;
   gap: 10px;
   padding: 12px;
+  border: 1px solid var(--bt-line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.bt-settings-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #cae6ff;
+}
+
+.bt-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--bt-text-muted);
+}
+
+.bt-toggle input {
+  width: 16px;
+  height: 16px;
 }
 
 .bt-field {
@@ -87,16 +149,17 @@
 
 .bt-field label {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--bt-text-muted);
 }
 
 .bt-field input {
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--bt-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--bt-text);
+  outline: none;
 }
 
 .bt-actions {
@@ -114,11 +177,11 @@
   align-items: center;
   gap: 6px;
   padding: 8px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--bt-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
   font-size: 12px;
-  color: #fff;
+  color: var(--bt-text);
 }
 
 .bt-role-option input {
@@ -127,23 +190,25 @@
 
 .bt-actions button,
 .bt-chat-form button {
-  height: 34px;
+  height: 38px;
   border: 0;
-  border-radius: 10px;
-  background: #00a1d6;
-  color: #fff;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--bt-accent), #2fa8ff);
+  color: var(--bt-text);
   font-size: 13px;
   cursor: pointer;
+  font-weight: 700;
 }
 
 .bt-actions .secondary {
   background: rgba(255, 255, 255, 0.1);
+  font-weight: 600;
 }
 
 .bt-presence,
 .bt-hint {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--bt-text-muted);
 }
 
 .bt-chat-list {
@@ -151,37 +216,69 @@
   min-height: 120px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 2px;
+  gap: 10px;
+  padding: 4px 2px;
   overflow-y: auto;
 }
 
 .bt-chat-item {
-  padding: 8px 10px;
-  border-radius: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
   background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.04);
   font-size: 12px;
   line-height: 1.45;
 }
 
-.bt-chat-item strong {
-  color: #7dd8ff;
+.bt-chat-item-self {
+  background: linear-gradient(135deg, rgba(89, 183, 255, 0.16), rgba(89, 183, 255, 0.08));
+  border-color: rgba(89, 183, 255, 0.14);
+}
+
+.bt-chat-item-system {
+  background: rgba(255, 255, 255, 0.04);
+  border-style: dashed;
+}
+
+.bt-chat-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.bt-chat-meta strong {
+  color: #8ed6ff;
+}
+
+.bt-chat-meta span {
+  color: var(--bt-text-muted);
+  font-size: 11px;
+}
+
+.bt-chat-text {
+  color: var(--bt-text);
+  word-break: break-word;
 }
 
 .bt-chat-form {
   display: flex;
   gap: 8px;
   margin-top: auto;
-  padding-top: 4px;
-  background: rgba(18, 18, 24, 0.92);
+  padding-top: 8px;
+  background:
+    linear-gradient(180deg, rgba(13, 18, 31, 0), rgba(13, 18, 31, 0.86) 24%),
+    transparent;
 }
 
 .bt-chat-form input {
   flex: 1;
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--bt-line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--bt-text);
+  outline: none;
 }

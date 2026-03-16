@@ -1,5 +1,15 @@
 const SERVER_URL = "ws://106.53.151.206:8787";
-const STORAGE_KEYS = ["sessionId", "nickname", "clientId", "role"];
+const STORAGE_KEYS = [
+  "sessionId",
+  "nickname",
+  "clientId",
+  "role",
+  "speechEnabled",
+  "rememberPanel",
+  "panelX",
+  "panelY",
+  "collapsed",
+];
 const state = {
   ws: null,
   sessionId: "",
@@ -17,6 +27,9 @@ const state = {
   lastRemoteVideoState: null,
   recentChatKeys: new Set(),
   reconnectTimer: null,
+  settingsOpen: false,
+  speechEnabled: false,
+  rememberPanel: true,
   collapsed: false,
   dragPointerId: null,
   dragOffsetX: 0,
@@ -47,12 +60,22 @@ async function init() {
   state.nickname = stored.nickname || createDefaultNickname();
   state.clientId = stored.clientId || crypto.randomUUID();
   state.role = stored.role === "host" ? "host" : "guest";
+  state.speechEnabled = Boolean(stored.speechEnabled);
+  state.rememberPanel = stored.rememberPanel !== false;
+  state.collapsed = Boolean(stored.collapsed);
+  state.panelX = typeof stored.panelX === "number" ? stored.panelX : null;
+  state.panelY = typeof stored.panelY === "number" ? stored.panelY : 88;
 
   await chrome.storage.local.set({
     sessionId: state.sessionId,
     nickname: state.nickname,
     clientId: state.clientId,
     role: state.role,
+    speechEnabled: state.speechEnabled,
+    rememberPanel: state.rememberPanel,
+    panelX: state.panelX,
+    panelY: state.panelY,
+    collapsed: state.collapsed,
   });
 
   buildPanel();
@@ -79,11 +102,27 @@ function buildPanel() {
           <div class="bt-status" data-role="status">请输入房间秘钥</div>
         </div>
         <div class="bt-header-actions">
+          <button data-role="settings" class="bt-icon-btn" type="button">⚙</button>
           <button data-role="collapse" class="bt-icon-btn" type="button">-</button>
           <button data-role="hide" class="bt-icon-btn" type="button">×</button>
         </div>
       </div>
       <div class="bt-body" data-role="body">
+        <div class="bt-hero">
+          <div class="bt-hero-chip" data-role="roleBadge">客人模式</div>
+          <div class="bt-hero-chip bt-hero-chip-muted" data-role="serverBadge">服务器已内置</div>
+        </div>
+        <div class="bt-settings" data-role="settingsPanel">
+          <div class="bt-settings-title">常用设置</div>
+          <label class="bt-toggle">
+            <span>收到对方消息时朗读</span>
+            <input data-role="speechEnabled" type="checkbox" />
+          </label>
+          <label class="bt-toggle">
+            <span>记住面板位置和最小化状态</span>
+            <input data-role="rememberPanel" type="checkbox" />
+          </label>
+        </div>
         <div class="bt-field">
           <label>房间秘钥</label>
           <input data-role="sessionId" placeholder="例如：room-001" />
@@ -126,10 +165,14 @@ function buildPanel() {
   elements.nickname = root.querySelector('[data-role="nickname"]');
   elements.hostRadio = root.querySelector('[data-role="hostRadio"]');
   elements.guestRadio = root.querySelector('[data-role="guestRadio"]');
+  elements.roleBadge = root.querySelector('[data-role="roleBadge"]');
   elements.presence = root.querySelector('[data-role="presence"]');
   elements.hint = root.querySelector('[data-role="hint"]');
   elements.body = root.querySelector('[data-role="body"]');
   elements.dragHandle = root.querySelector('[data-role="dragHandle"]');
+  elements.settingsPanel = root.querySelector('[data-role="settingsPanel"]');
+  elements.speechEnabled = root.querySelector('[data-role="speechEnabled"]');
+  elements.rememberPanel = root.querySelector('[data-role="rememberPanel"]');
   elements.chatList = root.querySelector('[data-role="chatList"]');
   elements.chatForm = root.querySelector('[data-role="chatForm"]');
   elements.chatInput = root.querySelector('[data-role="chatInput"]');
@@ -141,6 +184,11 @@ function buildPanel() {
 
   root.querySelector('[data-role="collapse"]').addEventListener("click", () => {
     state.collapsed = !state.collapsed;
+    persistUiState();
+    render();
+  });
+  root.querySelector('[data-role="settings"]').addEventListener("click", () => {
+    state.settingsOpen = !state.settingsOpen;
     render();
   });
 
@@ -168,6 +216,10 @@ function render() {
   elements.nickname.value = state.nickname;
   elements.hostRadio.checked = state.role === "host";
   elements.guestRadio.checked = state.role !== "host";
+  elements.roleBadge.textContent = state.role === "host" ? "主人模式" : "客人模式";
+  elements.speechEnabled.checked = state.speechEnabled;
+  elements.rememberPanel.checked = state.rememberPanel;
+  elements.settingsPanel.style.display = state.settingsOpen ? "flex" : "none";
   elements.body.style.display = state.collapsed ? "none" : "flex";
   root.querySelector('[data-role="collapse"]').textContent = state.collapsed ? "+" : "-";
   elements.status.textContent = state.isConnected ? `${roleText(state.role)}已连接` : elements.status.textContent;
@@ -183,12 +235,19 @@ async function saveSettings() {
   state.sessionId = elements.sessionId.value.trim();
   state.nickname = elements.nickname.value.trim() || createDefaultNickname();
   state.role = elements.hostRadio.checked ? "host" : "guest";
+  state.speechEnabled = elements.speechEnabled.checked;
+  state.rememberPanel = elements.rememberPanel.checked;
 
   await chrome.storage.local.set({
     sessionId: state.sessionId,
     nickname: state.nickname,
     clientId: state.clientId,
     role: state.role,
+    speechEnabled: state.speechEnabled,
+    rememberPanel: state.rememberPanel,
+    panelX: state.rememberPanel ? state.panelX : null,
+    panelY: state.rememberPanel ? state.panelY : 88,
+    collapsed: state.rememberPanel ? state.collapsed : false,
   });
 
   if (!state.sessionId) {
@@ -229,7 +288,7 @@ function handleServerMessage(message) {
 
     if (Array.isArray(message.chatHistory)) {
       for (const item of message.chatHistory) {
-        appendChatMessage(item);
+        appendChatMessage(item, { speak: false });
       }
     }
 
@@ -266,7 +325,9 @@ function handleServerMessage(message) {
   }
 
   if (message.type === "chat_message") {
-    appendChatMessage(message);
+    appendChatMessage(message, {
+      speak: message.senderId !== state.clientId,
+    });
     return;
   }
 
@@ -313,10 +374,10 @@ function appendSystemMessage(text) {
     nickname: "系统",
     text,
     sentAt: Date.now(),
-  });
+  }, { speak: false });
 }
 
-function appendChatMessage(message) {
+function appendChatMessage(message, options = {}) {
   if (!elements.chatList) {
     return;
   }
@@ -333,10 +394,20 @@ function appendChatMessage(message) {
 
   const item = document.createElement("div");
   item.className = "bt-chat-item";
+  if (message.senderId === state.clientId) {
+    item.classList.add("bt-chat-item-self");
+  }
+  if ((message.nickname || "") === "系统") {
+    item.classList.add("bt-chat-item-system");
+  }
   const time = new Date(message.sentAt || Date.now()).toLocaleTimeString();
-  item.innerHTML = `<strong>${escapeHtml(message.nickname || "Guest")}</strong> <span style="opacity:.6">${time}</span><br>${escapeHtml(message.text || "")}`;
+  item.innerHTML = `<div class="bt-chat-meta"><strong>${escapeHtml(message.nickname || "Guest")}</strong><span>${time}</span></div><div class="bt-chat-text">${escapeHtml(message.text || "")}</div>`;
   elements.chatList.appendChild(item);
   elements.chatList.scrollTop = elements.chatList.scrollHeight;
+
+  if (options.speak) {
+    maybeSpeakMessage(message);
+  }
 }
 
 function sendChatMessage() {
@@ -352,7 +423,7 @@ function sendChatMessage() {
     nickname: `${state.nickname}（我）`,
     text,
     sentAt: Date.now(),
-  });
+  }, { speak: false });
 }
 
 function watchVideo() {
@@ -596,6 +667,9 @@ function initDrag() {
 
     state.panelX = Math.max(8, Math.min(window.innerWidth - elements.panel.offsetWidth - 8, event.clientX - state.dragOffsetX));
     state.panelY = Math.max(8, Math.min(window.innerHeight - 48, event.clientY - state.dragOffsetY));
+    if (state.rememberPanel) {
+      persistUiState();
+    }
     render();
   });
 
@@ -605,6 +679,9 @@ function initDrag() {
     }
     state.dragPointerId = null;
     elements.dragHandle.releasePointerCapture(event.pointerId);
+    if (state.rememberPanel) {
+      persistUiState();
+    }
   };
 
   elements.dragHandle.addEventListener("pointerup", stopDrag);
@@ -615,6 +692,33 @@ function sendToBackground(payload) {
   chrome.runtime.sendMessage({
     type: "bt:send",
     payload,
+  });
+}
+
+function maybeSpeakMessage(message) {
+  if (!state.speechEnabled || !window.speechSynthesis) {
+    return;
+  }
+
+  if (!message.text || message.nickname === "系统") {
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(`${message.nickname}说，${message.text}`);
+  utterance.lang = "zh-CN";
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  window.speechSynthesis.speak(utterance);
+}
+
+function persistUiState() {
+  chrome.storage.local.set({
+    panelX: state.rememberPanel ? state.panelX : null,
+    panelY: state.rememberPanel ? state.panelY : 88,
+    collapsed: state.rememberPanel ? state.collapsed : false,
+    rememberPanel: state.rememberPanel,
+    speechEnabled: state.speechEnabled,
   });
 }
 
