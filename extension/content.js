@@ -9,6 +9,7 @@ const STORAGE_KEYS = [
   "panelX",
   "panelY",
   "collapsed",
+  "debugEnabled",
 ];
 const VIDEO_SELECTORS = [
   ".bpx-player-video-wrap video",
@@ -36,6 +37,7 @@ const state = {
   settingsOpen: false,
   speechEnabled: false,
   rememberPanel: true,
+  debugEnabled: true,
   collapsed: false,
   dragPointerId: null,
   dragOffsetX: 0,
@@ -45,6 +47,7 @@ const state = {
   voicesReady: false,
   hostSyncTimer: null,
   guestEnforceTimer: null,
+  debugLogs: [],
 };
 
 const elements = {};
@@ -72,6 +75,7 @@ async function init() {
   state.speechEnabled = Boolean(stored.speechEnabled);
   state.rememberPanel = stored.rememberPanel !== false;
   state.collapsed = Boolean(stored.collapsed);
+  state.debugEnabled = stored.debugEnabled !== false;
   state.panelX = typeof stored.panelX === "number" ? stored.panelX : null;
   state.panelY = typeof stored.panelY === "number" ? stored.panelY : 88;
 
@@ -82,6 +86,7 @@ async function init() {
     role: state.role,
     speechEnabled: state.speechEnabled,
     rememberPanel: state.rememberPanel,
+    debugEnabled: state.debugEnabled,
     panelX: state.panelX,
     panelY: state.panelY,
     collapsed: state.collapsed,
@@ -135,6 +140,10 @@ function buildPanel() {
             <span>记住面板位置和最小化状态</span>
             <input data-role="rememberPanel" type="checkbox" />
           </label>
+          <label class="bt-toggle">
+            <span>显示调试日志</span>
+            <input data-role="debugEnabled" type="checkbox" />
+          </label>
         </div>
         <div class="bt-field">
           <label>房间秘钥</label>
@@ -168,6 +177,13 @@ function buildPanel() {
           <input data-role="chatInput" placeholder="发送一条消息" maxlength="500" />
           <button type="submit">发送</button>
         </form>
+        <div class="bt-debug" data-role="debugPanel">
+          <div class="bt-debug-head">
+            <span>调试日志</span>
+            <button data-role="clearDebug" type="button">清空</button>
+          </div>
+          <div class="bt-debug-list" data-role="debugList"></div>
+        </div>
       </div>
     </div>
   `;
@@ -187,9 +203,12 @@ function buildPanel() {
   elements.settingsPanel = root.querySelector('[data-role="settingsPanel"]');
   elements.speechEnabled = root.querySelector('[data-role="speechEnabled"]');
   elements.rememberPanel = root.querySelector('[data-role="rememberPanel"]');
+  elements.debugEnabled = root.querySelector('[data-role="debugEnabled"]');
   elements.chatList = root.querySelector('[data-role="chatList"]');
   elements.chatForm = root.querySelector('[data-role="chatForm"]');
   elements.chatInput = root.querySelector('[data-role="chatInput"]');
+  elements.debugPanel = root.querySelector('[data-role="debugPanel"]');
+  elements.debugList = root.querySelector('[data-role="debugList"]');
 
   root.querySelector('[data-role="hide"]').addEventListener("click", () => {
     state.panelVisible = false;
@@ -230,6 +249,15 @@ function buildPanel() {
     await persistUiState();
     render();
   });
+  elements.debugEnabled.addEventListener("change", async () => {
+    state.debugEnabled = elements.debugEnabled.checked;
+    await persistUiState();
+    render();
+  });
+  root.querySelector('[data-role="clearDebug"]').addEventListener("click", () => {
+    state.debugLogs = [];
+    renderDebugLogs();
+  });
 
   root.querySelector('[data-role="save"]').addEventListener("click", saveSettings);
   root.querySelector('[data-role="syncNow"]').addEventListener("click", syncCurrentVideoState);
@@ -262,6 +290,7 @@ function render() {
   elements.roleBadge.textContent = state.role === "host" ? "主人模式" : "客人模式";
   elements.speechEnabled.checked = state.speechEnabled;
   elements.rememberPanel.checked = state.rememberPanel;
+  elements.debugEnabled.checked = state.debugEnabled;
   elements.settingsPanel.style.display = state.settingsOpen ? "flex" : "none";
   elements.body.style.display = state.collapsed ? "none" : "flex";
   root.querySelector('[data-role="collapse"]').textContent = state.collapsed ? "+" : "-";
@@ -269,10 +298,12 @@ function render() {
   elements.status.textContent = state.isConnected ? `${roleText(state.role)}已连接` : elements.status.textContent;
   elements.presence.textContent = `在线人数：${state.users.length}/2`;
   elements.chatInput.disabled = !state.isConnected;
+  elements.debugPanel.style.display = state.debugEnabled ? "flex" : "none";
   elements.hint.textContent =
     state.role === "host"
       ? "你是主人。你在 B 站里的页面切换、播放、暂停和拖动会驱动客人。"
       : "你是客人。你会跟随主人在 B 站里的页面和视频状态。";
+  renderDebugLogs();
 }
 
 async function saveSettings() {
@@ -289,6 +320,7 @@ async function saveSettings() {
     role: state.role,
     speechEnabled: state.speechEnabled,
     rememberPanel: state.rememberPanel,
+    debugEnabled: state.debugEnabled,
     panelX: state.rememberPanel ? state.panelX : null,
     panelY: state.rememberPanel ? state.panelY : 88,
     collapsed: state.rememberPanel ? state.collapsed : false,
@@ -308,6 +340,7 @@ function connect() {
     return;
   }
 
+  addDebugLog("connect", `准备连接房间 ${state.sessionId}，身份：${roleText(state.role)}`);
   setStatus(false, "连接中...");
   render();
   chrome.runtime.sendMessage({
@@ -322,6 +355,7 @@ function connect() {
 
 function handleServerMessage(message) {
   if (message.type === "joined") {
+    addDebugLog("joined", `已进入房间，hostClientId=${message.hostClientId || "none"}`);
     state.users = message.users || [];
     state.hostClientId = message.hostClientId || null;
     setStatus(true, `${roleText(state.role)}已连接`);
@@ -349,6 +383,7 @@ function handleServerMessage(message) {
   }
 
   if (message.type === "presence") {
+    addDebugLog("presence", `在线人数=${(message.users || []).length}`);
     state.users = message.users || [];
     const hostUser = state.users.find((user) => user.role === "host");
     state.hostClientId = hostUser?.clientId || null;
@@ -376,6 +411,7 @@ function handleServerMessage(message) {
 
   if (message.type === "navigate") {
     if (state.role === "guest" && message.senderId === state.hostClientId && message.url && message.url !== location.href) {
+      addDebugLog("navigate:recv", `收到页面跳转 ${shortUrl(message.url)}`);
       navigateTo(message.url);
     }
     return;
@@ -383,6 +419,10 @@ function handleServerMessage(message) {
 
   if (message.type === "video_state") {
     if (state.role === "guest" && message.senderId === state.hostClientId) {
+      addDebugLog(
+        "video:recv",
+        `动作=${message.action} time=${Number(message.currentTime || 0).toFixed(2)} paused=${Boolean(message.paused)}`
+      );
       state.lastRemoteVideoState = message;
       applyRemoteVideoState(message);
     }
@@ -487,6 +527,7 @@ function watchVideo() {
     }
 
     video.dataset.btBound = "1";
+    addDebugLog("video:bind", describeVideo(video));
     video.addEventListener("play", () => sendVideoState("play"));
     video.addEventListener("pause", () => sendVideoState("pause"));
     video.addEventListener("seeked", () => sendVideoState("seeked"));
@@ -634,6 +675,7 @@ function sendNavigate(url) {
   if (!isBilibiliUrl(url)) {
     return;
   }
+  addDebugLog("navigate:send", shortUrl(url));
   sendToBackground({ type: "navigate", url });
 }
 
@@ -663,6 +705,10 @@ function sendVideoState(action) {
 
   state.lastSentSignature = signature;
   state.lastSyncAt = Date.now();
+  addDebugLog(
+    "video:send",
+    `动作=${action} time=${payload.currentTime.toFixed(2)} paused=${payload.paused}`
+  );
   sendToBackground(payload);
 }
 
@@ -677,6 +723,7 @@ function applyRemoteVideoState(message) {
   const apply = () => {
     const video = getVideoElement();
     if (!video) {
+      addDebugLog("video:apply", "未找到视频元素");
       return false;
     }
 
@@ -697,6 +744,10 @@ function applyRemoteVideoState(message) {
     } else {
       video.play().catch(() => {});
     }
+    addDebugLog(
+      "video:apply",
+      `已应用 time=${targetTime.toFixed(2)} paused=${Boolean(message.paused)} localPaused=${video.paused}`
+    );
     return true;
   };
 
@@ -849,6 +900,7 @@ async function persistUiState() {
     collapsed: state.rememberPanel ? state.collapsed : false,
     rememberPanel: state.rememberPanel,
     speechEnabled: state.speechEnabled,
+    debugEnabled: state.debugEnabled,
   });
 }
 
@@ -882,6 +934,7 @@ chrome.runtime.onMessage.addListener((message) => {
 
   if (message.type === "bt:socket") {
     if (message.event === "open") {
+      addDebugLog("socket", "连接已建立");
       setStatus(true, `${roleText(state.role)}已连接`);
       if (state.reconnectTimer) {
         clearTimeout(state.reconnectTimer);
@@ -892,14 +945,58 @@ chrome.runtime.onMessage.addListener((message) => {
     }
 
     if (message.event === "close") {
+      addDebugLog("socket", "连接关闭");
       setStatus(false, state.sessionId ? "连接断开，正在重试..." : "连接断开");
       render();
       return;
     }
 
     if (message.event === "error") {
+      addDebugLog("socket", "连接错误");
       setStatus(false, "连接错误");
       render();
     }
   }
 });
+
+function addDebugLog(tag, text) {
+  const entry = {
+    tag,
+    text,
+    at: new Date().toLocaleTimeString(),
+  };
+  state.debugLogs.unshift(entry);
+  state.debugLogs = state.debugLogs.slice(0, 40);
+  renderDebugLogs();
+}
+
+function renderDebugLogs() {
+  if (!elements.debugList) {
+    return;
+  }
+
+  if (!state.debugEnabled) {
+    elements.debugList.innerHTML = "";
+    return;
+  }
+
+  elements.debugList.innerHTML = state.debugLogs
+    .map(
+      (item) =>
+        `<div class="bt-debug-item"><span class="bt-debug-time">${escapeHtml(item.at)}</span><strong>${escapeHtml(item.tag)}</strong><span>${escapeHtml(item.text)}</span></div>`
+    )
+    .join("");
+}
+
+function shortUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.pathname}${parsed.search}`;
+  } catch {
+    return url;
+  }
+}
+
+function describeVideo(video) {
+  return `video ${video.clientWidth}x${video.clientHeight} paused=${video.paused} time=${video.currentTime.toFixed(2)}`;
+}

@@ -312,3 +312,57 @@
   color: var(--bt-text);
   outline: none;
 }
+
+.bt-debug {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--bt-line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.bt-debug-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--bt-text-muted);
+  font-size: 12px;
+}
+
+.bt-debug-head button {
+  border: 0;
+  background: transparent;
+  color: #8ed6ff;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.bt-debug-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.bt-debug-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--bt-text-muted);
+  font-size: 11px;
+}
+
+.bt-debug-item strong {
+  color: #cdeaff;
+  font-size: 11px;
+}
+
+.bt-debug-time {
+  color: rgba(255, 255, 255, 0.45);
+}
