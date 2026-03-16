@@ -49,6 +49,8 @@ const state = {
   voicesReady: false,
   hostSyncTimer: null,
   guestEnforceTimer: null,
+  hostObserveTimer: null,
+  lastObservedVideoState: null,
   debugLogs: [],
 };
 
@@ -103,6 +105,7 @@ async function init() {
   installVisibilitySync();
   initSpeechVoices();
   startHostSyncLoop();
+  startHostObserveLoop();
   startGuestEnforceLoop();
   startUrlWatcher();
 
@@ -580,6 +583,47 @@ function startHostSyncLoop() {
   }, 1200);
 }
 
+function startHostObserveLoop() {
+  if (state.hostObserveTimer) {
+    clearInterval(state.hostObserveTimer);
+  }
+
+  state.hostObserveTimer = window.setInterval(() => {
+    if (state.role !== "host" || !state.isConnected || Date.now() < state.suppressUntil) {
+      return;
+    }
+
+    const video = getVideoElement();
+    if (!video) {
+      state.lastObservedVideoState = null;
+      return;
+    }
+
+    const observed = {
+      currentTime: Number(video.currentTime.toFixed(2)),
+      paused: video.paused,
+      playbackRate: Number(video.playbackRate.toFixed(2)),
+      url: location.href,
+    };
+
+    if (!state.lastObservedVideoState) {
+      state.lastObservedVideoState = observed;
+      return;
+    }
+
+    const timeDiff = Math.abs(observed.currentTime - state.lastObservedVideoState.currentTime);
+    const pauseChanged = observed.paused !== state.lastObservedVideoState.paused;
+    const rateChanged = Math.abs(observed.playbackRate - state.lastObservedVideoState.playbackRate) > 0.01;
+    const urlChanged = observed.url !== state.lastObservedVideoState.url;
+
+    if (pauseChanged || rateChanged || urlChanged || timeDiff > (observed.paused ? 0.35 : 1.1)) {
+      sendVideoState(pauseChanged ? "state-change" : "state-observe");
+    }
+
+    state.lastObservedVideoState = observed;
+  }, 350);
+}
+
 function startGuestEnforceLoop() {
   if (state.guestEnforceTimer) {
     clearInterval(state.guestEnforceTimer);
@@ -607,12 +651,22 @@ function startGuestEnforceLoop() {
       return;
     }
 
+    if (
+      state.lastRemoteVideoState.playbackRate &&
+      Math.abs(video.playbackRate - state.lastRemoteVideoState.playbackRate) > 0.01 &&
+      Date.now() > state.suppressUntil
+    ) {
+      state.suppressUntil = Date.now() + 600;
+      video.playbackRate = state.lastRemoteVideoState.playbackRate;
+    }
+
     const remoteTime = Number(state.lastRemoteVideoState.currentTime || 0);
-    if (Math.abs(video.currentTime - remoteTime) > 1.2 && Date.now() > state.suppressUntil) {
+    const timeThreshold = state.lastRemoteVideoState.paused ? 0.35 : 0.9;
+    if (Math.abs(video.currentTime - remoteTime) > timeThreshold && Date.now() > state.suppressUntil) {
       state.suppressUntil = Date.now() + 600;
       video.currentTime = remoteTime;
     }
-  }, 900);
+  }, 350);
 }
 
 function startUrlWatcher() {
@@ -966,7 +1020,7 @@ function addDebugLog(tag, text) {
     at: new Date().toLocaleTimeString(),
   };
   state.debugLogs.unshift(entry);
-  state.debugLogs = state.debugLogs.slice(0, 40);
+  state.debugLogs = state.debugLogs.slice(0, 200);
 }
 
 function shortUrl(url) {
