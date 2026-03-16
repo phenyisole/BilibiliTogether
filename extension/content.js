@@ -195,68 +195,26 @@ async function saveSettings() {
   }
 
   appendSystemMessage(`正在以${roleText(state.role)}身份加入房间 ${state.sessionId}`);
-  connect(true);
+  connect();
 }
 
-function connect(forceReconnect = false) {
+function connect() {
   if (!state.sessionId) {
     return;
   }
 
-  if (forceReconnect && state.ws) {
-    state.ws.close();
-  }
-
-  if (state.ws && (state.ws.readyState === WebSocket.OPEN || state.ws.readyState === WebSocket.CONNECTING)) {
-    return;
-  }
-
-  const ws = new WebSocket(SERVER_URL);
-  state.ws = ws;
   setStatus(false, "连接中...");
   render();
-
-  ws.addEventListener("open", () => {
-    setStatus(true, `${roleText(state.role)}已连接`);
-    if (state.reconnectTimer) {
-      clearTimeout(state.reconnectTimer);
-      state.reconnectTimer = null;
-    }
-    render();
-    ws.send(
-      JSON.stringify({
-        type: "join",
-        sessionId: state.sessionId,
-        clientId: state.clientId,
-        nickname: state.nickname,
-        role: state.role,
-      })
-    );
+  chrome.runtime.sendMessage({
+    type: "bt:disconnect",
   });
-
-  ws.addEventListener("message", (event) => {
-    let message;
-    try {
-      message = JSON.parse(event.data);
-    } catch {
-      return;
-    }
-    handleServerMessage(message);
-  });
-
-  ws.addEventListener("close", () => {
-    setStatus(false, state.sessionId ? "连接断开，正在重试..." : "连接断开");
-    render();
-    state.reconnectTimer = window.setTimeout(() => {
-      if (state.ws === ws && state.sessionId) {
-        connect();
-      }
-    }, 2000);
-  });
-
-  ws.addEventListener("error", () => {
-    setStatus(false, "连接错误");
-    render();
+  chrome.runtime.sendMessage({
+    type: "bt:connect",
+    serverUrl: SERVER_URL,
+    sessionId: state.sessionId,
+    clientId: state.clientId,
+    nickname: state.nickname,
+    role: state.role,
   });
 }
 
@@ -343,6 +301,7 @@ function handleServerMessage(message) {
 
 function setStatus(connected, text) {
   state.isConnected = connected;
+  state.ws = connected ? { readyState: WebSocket.OPEN } : null;
   if (elements.status) {
     elements.status.textContent = text;
   }
@@ -381,12 +340,12 @@ function appendChatMessage(message) {
 
 function sendChatMessage() {
   const text = elements.chatInput.value.trim();
-  if (!text || !state.ws || state.ws.readyState !== WebSocket.OPEN) {
+  if (!text || !state.isConnected) {
     return;
   }
 
   elements.chatInput.value = "";
-  state.ws.send(JSON.stringify({ type: "chat_message", text }));
+  sendToBackground({ type: "chat_message", text });
   appendChatMessage({
     senderId: state.clientId,
     nickname: `${state.nickname}（我）`,
@@ -453,17 +412,17 @@ function installHistoryHooks() {
 }
 
 function sendNavigate(url) {
-  if (state.role !== "host" || !state.ws || state.ws.readyState !== WebSocket.OPEN) {
+  if (state.role !== "host" || !state.isConnected) {
     return;
   }
   if (!isBilibiliUrl(url)) {
     return;
   }
-  state.ws.send(JSON.stringify({ type: "navigate", url }));
+  sendToBackground({ type: "navigate", url });
 }
 
 function sendVideoState(action) {
-  if (state.role !== "host" || !state.ws || state.ws.readyState !== WebSocket.OPEN || Date.now() < state.suppressUntil) {
+  if (state.role !== "host" || !state.isConnected || Date.now() < state.suppressUntil) {
     return;
   }
 
@@ -488,7 +447,7 @@ function sendVideoState(action) {
 
   state.lastSentSignature = signature;
   state.lastSyncAt = Date.now();
-  state.ws.send(JSON.stringify(payload));
+  sendToBackground(payload);
 }
 
 function syncCurrentVideoState() {
@@ -613,3 +572,48 @@ function initDrag() {
   elements.dragHandle.addEventListener("pointerup", stopDrag);
   elements.dragHandle.addEventListener("pointercancel", stopDrag);
 }
+
+function sendToBackground(payload) {
+  chrome.runtime.sendMessage({
+    type: "bt:send",
+    payload,
+  });
+}
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === "bt:server-message") {
+    handleServerMessage(message.payload);
+    return;
+  }
+
+  if (message.type === "bt:socket") {
+    if (message.event === "open") {
+      setStatus(true, `${roleText(state.role)}已连接`);
+      if (state.reconnectTimer) {
+        clearTimeout(state.reconnectTimer);
+        state.reconnectTimer = null;
+      }
+      render();
+      return;
+    }
+
+    if (message.event === "close") {
+      setStatus(false, state.sessionId ? "连接断开，正在重试..." : "连接断开");
+      render();
+      if (state.reconnectTimer) {
+        clearTimeout(state.reconnectTimer);
+      }
+      state.reconnectTimer = window.setTimeout(() => {
+        if (state.sessionId) {
+          connect();
+        }
+      }, 2000);
+      return;
+    }
+
+    if (message.event === "error") {
+      setStatus(false, "连接错误");
+      render();
+    }
+  }
+});

@@ -1,8 +1,12 @@
 const DEFAULT_SETTINGS = {
-  serverUrl: "ws://106.53.151.206:8787",
-  sessionId: "demo-room",
-  nickname: "Guest",
+  sessionId: "",
+  nickname: "用户",
+  role: "guest",
+  clientId: "",
 };
+
+const connections = new Map();
+const tabState = new Map();
 
 chrome.runtime.onInstalled.addListener(async () => {
   const current = await chrome.storage.local.get(Object.keys(DEFAULT_SETTINGS));
@@ -12,6 +16,10 @@ chrome.runtime.onInstalled.addListener(async () => {
     if (!current[key]) {
       nextValues[key] = value;
     }
+  }
+
+  if (!current.clientId) {
+    nextValues.clientId = crypto.randomUUID();
   }
 
   if (Object.keys(nextValues).length > 0) {
@@ -26,3 +34,132 @@ chrome.action.onClicked.addListener(async (tab) => {
 
   await chrome.tabs.sendMessage(tab.id, { type: "toggle_panel" }).catch(() => {});
 });
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const tabId = sender.tab?.id;
+
+  if (message.type === "bt:connect") {
+    if (!tabId) {
+      sendResponse({ ok: false, error: "missing_tab" });
+      return;
+    }
+    tabState.set(tabId, {
+      sessionId: message.sessionId,
+      clientId: message.clientId,
+    });
+    connectSocket(tabId, message);
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (message.type === "bt:send") {
+    if (!tabId) {
+      sendResponse({ ok: false, error: "missing_tab" });
+      return;
+    }
+    const socket = connections.get(tabId);
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      sendResponse({ ok: false, error: "socket_not_open" });
+      return;
+    }
+    socket.send(JSON.stringify(message.payload));
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (message.type === "bt:disconnect") {
+    if (tabId) {
+      disconnectSocket(tabId);
+    }
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (message.type === "bt:get-status") {
+    const socket = tabId ? connections.get(tabId) : null;
+    sendResponse({
+      ok: true,
+      connected: Boolean(socket && socket.readyState === WebSocket.OPEN),
+    });
+    return true;
+  }
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  disconnectSocket(tabId);
+  tabState.delete(tabId);
+});
+
+function connectSocket(tabId, options) {
+  disconnectSocket(tabId);
+
+  const { serverUrl, sessionId, clientId, nickname, role } = options;
+  const ws = new WebSocket(serverUrl);
+  connections.set(tabId, ws);
+
+  ws.addEventListener("open", () => {
+    if (connections.get(tabId) !== ws) {
+      ws.close();
+      return;
+    }
+
+    ws.send(
+      JSON.stringify({
+        type: "join",
+        sessionId,
+        clientId,
+        nickname,
+        role,
+      })
+    );
+
+    postToTab(tabId, {
+      type: "bt:socket",
+      event: "open",
+    });
+  });
+
+  ws.addEventListener("message", (event) => {
+    let data;
+    try {
+      data = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+
+    postToTab(tabId, {
+      type: "bt:server-message",
+      payload: data,
+    });
+  });
+
+  ws.addEventListener("close", () => {
+    if (connections.get(tabId) === ws) {
+      connections.delete(tabId);
+    }
+
+    postToTab(tabId, {
+      type: "bt:socket",
+      event: "close",
+    });
+  });
+
+  ws.addEventListener("error", () => {
+    postToTab(tabId, {
+      type: "bt:socket",
+      event: "error",
+    });
+  });
+}
+
+function disconnectSocket(tabId) {
+  const existing = connections.get(tabId);
+  if (existing) {
+    connections.delete(tabId);
+    existing.close();
+  }
+}
+
+function postToTab(tabId, message) {
+  chrome.tabs.sendMessage(tabId, message).catch(() => {});
+}
