@@ -16,6 +16,12 @@ const state = {
   lastSentSignature: "",
   recentChatKeys: new Set(),
   reconnectTimer: null,
+  collapsed: false,
+  dragPointerId: null,
+  dragOffsetX: 0,
+  dragOffsetY: 0,
+  panelX: null,
+  panelY: 88,
 };
 
 const elements = {};
@@ -56,7 +62,7 @@ async function init() {
   if (state.sessionId) {
     connect();
   } else {
-    setStatus(false, "Enter key to start");
+    setStatus(false, "请输入房间秘钥");
     render();
   }
 }
@@ -64,45 +70,48 @@ async function init() {
 function buildPanel() {
   root.innerHTML = `
     <div class="bt-panel" style="display:${state.panelVisible ? "flex" : "none"}">
-      <div class="bt-header">
+      <div class="bt-header" data-role="dragHandle">
         <div>
           <div class="bt-title">Bilibili Together</div>
-          <div class="bt-status" data-role="status">Enter key to start</div>
+          <div class="bt-status" data-role="status">请输入房间秘钥</div>
         </div>
-        <button data-role="hide" style="all:unset;cursor:pointer;font-size:18px;line-height:1;">×</button>
+        <div class="bt-header-actions">
+          <button data-role="collapse" class="bt-icon-btn" type="button">-</button>
+          <button data-role="hide" class="bt-icon-btn" type="button">×</button>
+        </div>
       </div>
-      <div class="bt-body">
+      <div class="bt-body" data-role="body">
         <div class="bt-field">
-          <label>Room Key</label>
-          <input data-role="sessionId" placeholder="example: room-001" />
+          <label>房间秘钥</label>
+          <input data-role="sessionId" placeholder="例如：room-001" />
         </div>
         <div class="bt-field">
-          <label>Nickname</label>
+          <label>昵称</label>
           <input data-role="nickname" />
         </div>
         <div class="bt-field">
-          <label>Role</label>
+          <label>身份</label>
           <div class="bt-role-row">
             <label class="bt-role-option">
               <input data-role="hostRadio" type="radio" name="bt-role" value="host" />
-              <span>Host</span>
+              <span>主人</span>
             </label>
             <label class="bt-role-option">
               <input data-role="guestRadio" type="radio" name="bt-role" value="guest" />
-              <span>Guest</span>
+              <span>客人</span>
             </label>
           </div>
         </div>
         <div class="bt-actions">
-          <button data-role="save">Join Room</button>
-          <button data-role="syncNow" class="secondary">Host Sync</button>
+          <button data-role="save">进入房间</button>
+          <button data-role="syncNow" class="secondary">主人同步</button>
         </div>
-        <div class="bt-presence" data-role="presence">Peers: 0/2</div>
-        <div class="bt-hint" data-role="hint">Host controls page follow, play, pause and seek. Guest only follows.</div>
+        <div class="bt-presence" data-role="presence">在线人数：0/2</div>
+        <div class="bt-hint" data-role="hint">主人控制页面跟随、播放、暂停和拖动，客人只负责跟随。</div>
         <div class="bt-chat-list" data-role="chatList"></div>
         <form class="bt-chat-form" data-role="chatForm">
-          <input data-role="chatInput" placeholder="Send a message" maxlength="500" />
-          <button type="submit">Send</button>
+          <input data-role="chatInput" placeholder="发送一条消息" maxlength="500" />
+          <button type="submit">发送</button>
         </form>
       </div>
     </div>
@@ -116,6 +125,8 @@ function buildPanel() {
   elements.guestRadio = root.querySelector('[data-role="guestRadio"]');
   elements.presence = root.querySelector('[data-role="presence"]');
   elements.hint = root.querySelector('[data-role="hint"]');
+  elements.body = root.querySelector('[data-role="body"]');
+  elements.dragHandle = root.querySelector('[data-role="dragHandle"]');
   elements.chatList = root.querySelector('[data-role="chatList"]');
   elements.chatForm = root.querySelector('[data-role="chatForm"]');
   elements.chatInput = root.querySelector('[data-role="chatInput"]');
@@ -125,12 +136,18 @@ function buildPanel() {
     render();
   });
 
+  root.querySelector('[data-role="collapse"]').addEventListener("click", () => {
+    state.collapsed = !state.collapsed;
+    render();
+  });
+
   root.querySelector('[data-role="save"]').addEventListener("click", saveSettings);
   root.querySelector('[data-role="syncNow"]').addEventListener("click", syncCurrentVideoState);
   elements.chatForm.addEventListener("submit", (event) => {
     event.preventDefault();
     sendChatMessage();
   });
+  initDrag();
 
   render();
 }
@@ -141,17 +158,22 @@ function render() {
   }
 
   elements.panel.style.display = state.panelVisible ? "flex" : "none";
+  elements.panel.style.left = state.panelX == null ? "auto" : `${state.panelX}px`;
+  elements.panel.style.right = state.panelX == null ? "20px" : "auto";
+  elements.panel.style.top = `${state.panelY}px`;
   elements.sessionId.value = state.sessionId;
   elements.nickname.value = state.nickname;
   elements.hostRadio.checked = state.role === "host";
   elements.guestRadio.checked = state.role !== "host";
-  elements.status.textContent = state.isConnected ? `${capitalizeRole(state.role)} connected` : elements.status.textContent;
-  elements.presence.textContent = `Peers: ${state.users.length}/2`;
+  elements.body.style.display = state.collapsed ? "none" : "flex";
+  root.querySelector('[data-role="collapse"]').textContent = state.collapsed ? "+" : "-";
+  elements.status.textContent = state.isConnected ? `${roleText(state.role)}已连接` : elements.status.textContent;
+  elements.presence.textContent = `在线人数：${state.users.length}/2`;
   elements.chatInput.disabled = !state.isConnected;
   elements.hint.textContent =
     state.role === "host"
-      ? "You are host. Your Bilibili page, play, pause and seek will drive the guest."
-      : "You are guest. You will follow the host on any Bilibili page and video state.";
+      ? "你是主人。你在 B 站里的页面切换、播放、暂停和拖动会驱动客人。"
+      : "你是客人。你会跟随主人在 B 站里的页面和视频状态。";
 }
 
 async function saveSettings() {
@@ -167,12 +189,12 @@ async function saveSettings() {
   });
 
   if (!state.sessionId) {
-    setStatus(false, "Room key required");
+    setStatus(false, "请输入房间秘钥");
     render();
     return;
   }
 
-  appendSystemMessage(`Joining ${state.sessionId} as ${capitalizeRole(state.role)}`);
+  appendSystemMessage(`正在以${roleText(state.role)}身份加入房间 ${state.sessionId}`);
   connect(true);
 }
 
@@ -191,11 +213,11 @@ function connect(forceReconnect = false) {
 
   const ws = new WebSocket(SERVER_URL);
   state.ws = ws;
-  setStatus(false, "Connecting...");
+  setStatus(false, "连接中...");
   render();
 
   ws.addEventListener("open", () => {
-    setStatus(true, `${capitalizeRole(state.role)} connected`);
+    setStatus(true, `${roleText(state.role)}已连接`);
     if (state.reconnectTimer) {
       clearTimeout(state.reconnectTimer);
       state.reconnectTimer = null;
@@ -223,7 +245,7 @@ function connect(forceReconnect = false) {
   });
 
   ws.addEventListener("close", () => {
-    setStatus(false, state.sessionId ? "Disconnected, retrying..." : "Disconnected");
+    setStatus(false, state.sessionId ? "连接断开，正在重试..." : "连接断开");
     render();
     state.reconnectTimer = window.setTimeout(() => {
       if (state.ws === ws && state.sessionId) {
@@ -233,7 +255,7 @@ function connect(forceReconnect = false) {
   });
 
   ws.addEventListener("error", () => {
-    setStatus(false, "Connection error");
+    setStatus(false, "连接错误");
     render();
   });
 }
@@ -242,10 +264,10 @@ function handleServerMessage(message) {
   if (message.type === "joined") {
     state.users = message.users || [];
     state.hostClientId = message.hostClientId || null;
-    setStatus(true, `${capitalizeRole(state.role)} connected`);
+    setStatus(true, `${roleText(state.role)}已连接`);
     render();
     clearChatIfFreshJoin();
-    appendSystemMessage(`Joined room ${message.sessionId}`);
+    appendSystemMessage(`已进入房间 ${message.sessionId}`);
 
     if (Array.isArray(message.chatHistory)) {
       for (const item of message.chatHistory) {
@@ -276,12 +298,12 @@ function handleServerMessage(message) {
   }
 
   if (message.type === "peer_joined") {
-    appendSystemMessage(`${message.nickname || "Peer"} joined as ${capitalizeRole(message.role || "guest")}`);
+    appendSystemMessage(`${message.nickname || "对方"}以${roleText(message.role || "guest")}身份加入了房间`);
     return;
   }
 
   if (message.type === "peer_left") {
-    appendSystemMessage("Peer left");
+    appendSystemMessage("对方已离开");
     return;
   }
 
@@ -292,7 +314,7 @@ function handleServerMessage(message) {
 
   if (message.type === "navigate") {
     if (state.role === "guest" && message.senderId === state.hostClientId && message.url && message.url !== location.href) {
-      appendSystemMessage("Following host to another Bilibili page");
+      appendSystemMessage("正在跟随主人切换到新的 B 站页面");
       navigateTo(message.url);
     }
     return;
@@ -307,12 +329,12 @@ function handleServerMessage(message) {
 
   if (message.type === "error") {
     const messageMap = {
-      room_full: "Room is full",
-      host_taken: "Host already exists in this room",
-      host_only: "Only host can control sync",
-      join_required: "Join a room first",
+      room_full: "房间已满",
+      host_taken: "这个房间里已经有主人了",
+      host_only: "只有主人可以控制同步",
+      join_required: "请先进入房间",
     };
-    appendSystemMessage(`Server: ${messageMap[message.message] || message.message}`);
+    appendSystemMessage(`服务器：${messageMap[message.message] || message.message}`);
     if ((message.message === "room_full" || message.message === "host_taken") && state.ws) {
       state.ws.close();
     }
@@ -328,7 +350,7 @@ function setStatus(connected, text) {
 
 function appendSystemMessage(text) {
   appendChatMessage({
-    nickname: "System",
+    nickname: "系统",
     text,
     sentAt: Date.now(),
   });
@@ -367,7 +389,7 @@ function sendChatMessage() {
   state.ws.send(JSON.stringify({ type: "chat_message", text }));
   appendChatMessage({
     senderId: state.clientId,
-    nickname: `${state.nickname} (You)`,
+    nickname: `${state.nickname}（我）`,
     text,
     sentAt: Date.now(),
   });
@@ -527,7 +549,7 @@ function getVideoElement() {
 }
 
 function createDefaultNickname() {
-  return `User-${Math.random().toString(36).slice(2, 6)}`;
+  return `用户-${Math.random().toString(36).slice(2, 6)}`;
 }
 
 function isBilibiliUrl(url) {
@@ -551,6 +573,43 @@ function clearChatIfFreshJoin() {
   }
 }
 
-function capitalizeRole(role) {
-  return role === "host" ? "Host" : "Guest";
+function roleText(role) {
+  return role === "host" ? "主人" : "客人";
+}
+
+function initDrag() {
+  elements.dragHandle.addEventListener("pointerdown", (event) => {
+    if (event.target.closest(".bt-icon-btn")) {
+      return;
+    }
+
+    const rect = elements.panel.getBoundingClientRect();
+    state.dragPointerId = event.pointerId;
+    state.dragOffsetX = event.clientX - rect.left;
+    state.dragOffsetY = event.clientY - rect.top;
+    state.panelX = rect.left;
+    state.panelY = rect.top;
+    elements.dragHandle.setPointerCapture(event.pointerId);
+  });
+
+  elements.dragHandle.addEventListener("pointermove", (event) => {
+    if (state.dragPointerId !== event.pointerId) {
+      return;
+    }
+
+    state.panelX = Math.max(8, Math.min(window.innerWidth - elements.panel.offsetWidth - 8, event.clientX - state.dragOffsetX));
+    state.panelY = Math.max(8, Math.min(window.innerHeight - 48, event.clientY - state.dragOffsetY));
+    render();
+  });
+
+  const stopDrag = (event) => {
+    if (state.dragPointerId !== event.pointerId) {
+      return;
+    }
+    state.dragPointerId = null;
+    elements.dragHandle.releasePointerCapture(event.pointerId);
+  };
+
+  elements.dragHandle.addEventListener("pointerup", stopDrag);
+  elements.dragHandle.addEventListener("pointercancel", stopDrag);
 }
