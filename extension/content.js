@@ -95,6 +95,7 @@ async function init() {
 
 function buildPanel() {
   root.innerHTML = `
+    <button class="bt-mini-launcher" data-role="miniLauncher" type="button">一起看</button>
     <div class="bt-panel" style="display:${state.panelVisible ? "flex" : "none"}">
       <div class="bt-header" data-role="dragHandle">
         <div>
@@ -160,6 +161,7 @@ function buildPanel() {
   `;
 
   elements.panel = root.querySelector(".bt-panel");
+  elements.miniLauncher = root.querySelector('[data-role="miniLauncher"]');
   elements.status = root.querySelector('[data-role="status"]');
   elements.sessionId = root.querySelector('[data-role="sessionId"]');
   elements.nickname = root.querySelector('[data-role="nickname"]');
@@ -187,6 +189,12 @@ function buildPanel() {
     persistUiState();
     render();
   });
+  elements.miniLauncher.addEventListener("click", () => {
+    state.collapsed = false;
+    state.panelVisible = true;
+    persistUiState();
+    render();
+  });
   root.querySelector('[data-role="settings"]').addEventListener("click", () => {
     state.settingsOpen = !state.settingsOpen;
     render();
@@ -209,9 +217,13 @@ function render() {
   }
 
   elements.panel.style.display = state.panelVisible ? "flex" : "none";
+  elements.miniLauncher.style.display = state.panelVisible && state.collapsed ? "flex" : "none";
   elements.panel.style.left = state.panelX == null ? "auto" : `${state.panelX}px`;
   elements.panel.style.right = state.panelX == null ? "20px" : "auto";
   elements.panel.style.top = `${state.panelY}px`;
+  elements.miniLauncher.style.left = state.panelX == null ? "auto" : `${state.panelX}px`;
+  elements.miniLauncher.style.right = state.panelX == null ? "20px" : "auto";
+  elements.miniLauncher.style.top = `${state.panelY}px`;
   elements.sessionId.value = state.sessionId;
   elements.nickname.value = state.nickname;
   elements.hostRadio.checked = state.role === "host";
@@ -222,6 +234,7 @@ function render() {
   elements.settingsPanel.style.display = state.settingsOpen ? "flex" : "none";
   elements.body.style.display = state.collapsed ? "none" : "flex";
   root.querySelector('[data-role="collapse"]').textContent = state.collapsed ? "+" : "-";
+  elements.panel.classList.toggle("bt-panel-collapsed", state.collapsed);
   elements.status.textContent = state.isConnected ? `${roleText(state.role)}已连接` : elements.status.textContent;
   elements.presence.textContent = `在线人数：${state.users.length}/2`;
   elements.chatInput.disabled = !state.isConnected;

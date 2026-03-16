@@ -39,6 +39,35 @@
   backdrop-filter: blur(18px);
 }
 
+.bt-panel-collapsed {
+  width: 0;
+  height: 0;
+  overflow: visible;
+  border-color: transparent;
+  box-shadow: none;
+  background: transparent;
+}
+
+.bt-mini-launcher {
+  position: fixed;
+  right: 20px;
+  top: 88px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+  height: 42px;
+  padding: 0 16px;
+  border: 1px solid rgba(89, 183, 255, 0.22);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(89, 183, 255, 0.94), rgba(255, 122, 162, 0.94));
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 18px 48px rgba(26, 48, 92, 0.28);
+  cursor: pointer;
+}
+
 .bt-header {
   display: flex;
   align-items: center;
@@ -213,7 +242,7 @@
 
 .bt-chat-list {
   flex: 1;
-  min-height: 120px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -263,6 +292,7 @@
 }
 
 .bt-chat-form {
+  flex: 0 0 auto;
   display: flex;
   gap: 8px;
   margin-top: auto;
