@@ -14,6 +14,7 @@ const state = {
   lastUrl: location.href,
   lastSyncAt: 0,
   lastSentSignature: "",
+  lastRemoteVideoState: null,
   recentChatKeys: new Set(),
   reconnectTimer: null,
   collapsed: false,
@@ -57,6 +58,8 @@ async function init() {
   buildPanel();
   installHistoryHooks();
   watchVideo();
+  installGuestPlaybackGuard();
+  installVisibilitySync();
   startUrlWatcher();
 
   if (state.sessionId) {
@@ -206,9 +209,6 @@ function connect() {
   setStatus(false, "连接中...");
   render();
   chrome.runtime.sendMessage({
-    type: "bt:disconnect",
-  });
-  chrome.runtime.sendMessage({
     type: "bt:connect",
     serverUrl: SERVER_URL,
     sessionId: state.sessionId,
@@ -280,6 +280,7 @@ function handleServerMessage(message) {
 
   if (message.type === "video_state") {
     if (state.role === "guest" && message.senderId === state.hostClientId) {
+      state.lastRemoteVideoState = message;
       applyRemoteVideoState(message);
     }
     return;
@@ -371,6 +372,43 @@ function watchVideo() {
   installListeners();
   const observer = new MutationObserver(installListeners);
   observer.observe(document.documentElement, { childList: true, subtree: true });
+}
+
+function installGuestPlaybackGuard() {
+  const bindGuard = () => {
+    const video = getVideoElement();
+    if (!video || video.dataset.btGuestGuardBound === "1") {
+      return;
+    }
+
+    video.dataset.btGuestGuardBound = "1";
+    video.addEventListener("play", () => {
+      if (state.role !== "guest" || Date.now() < state.suppressUntil) {
+        return;
+      }
+
+      if (state.lastRemoteVideoState?.paused) {
+        state.suppressUntil = Date.now() + 800;
+        video.pause();
+      }
+    });
+  };
+
+  bindGuard();
+  const observer = new MutationObserver(bindGuard);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+}
+
+function installVisibilitySync() {
+  document.addEventListener("visibilitychange", () => {
+    if (state.role !== "host" || !state.isConnected) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      syncCurrentVideoState();
+    }, 300);
+  });
 }
 
 function startUrlWatcher() {
@@ -600,14 +638,6 @@ chrome.runtime.onMessage.addListener((message) => {
     if (message.event === "close") {
       setStatus(false, state.sessionId ? "连接断开，正在重试..." : "连接断开");
       render();
-      if (state.reconnectTimer) {
-        clearTimeout(state.reconnectTimer);
-      }
-      state.reconnectTimer = window.setTimeout(() => {
-        if (state.sessionId) {
-          connect();
-        }
-      }, 2000);
       return;
     }
 

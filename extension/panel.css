@@ -17,7 +17,7 @@
 .bt-panel {
   position: fixed;
   width: 320px;
-  max-height: calc(100vh - 120px);
+  height: min(560px, calc(100vh - 120px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -71,6 +71,8 @@
 }
 
 .bt-body {
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -145,11 +147,11 @@
 }
 
 .bt-chat-list {
+  flex: 1;
+  min-height: 120px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-height: 140px;
-  max-height: 260px;
   padding: 2px;
   overflow-y: auto;
 }
@@ -169,6 +171,9 @@
 .bt-chat-form {
   display: flex;
   gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+  background: rgba(18, 18, 24, 0.92);
 }
 
 .bt-chat-form input {

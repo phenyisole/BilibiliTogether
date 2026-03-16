@@ -7,6 +7,7 @@ const DEFAULT_SETTINGS = {
 
 const connections = new Map();
 const tabState = new Map();
+const tabCache = new Map();
 
 chrome.runtime.onInstalled.addListener(async () => {
   const current = await chrome.storage.local.get(Object.keys(DEFAULT_SETTINGS));
@@ -43,11 +44,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: false, error: "missing_tab" });
       return;
     }
-    tabState.set(tabId, {
+    const nextState = {
+      serverUrl: message.serverUrl,
       sessionId: message.sessionId,
       clientId: message.clientId,
-    });
-    connectSocket(tabId, message);
+      nickname: message.nickname,
+      role: message.role,
+    };
+    const previousState = tabState.get(tabId);
+    tabState.set(tabId, nextState);
+
+    if (shouldReuseConnection(previousState, nextState, connections.get(tabId))) {
+      flushTabState(tabId);
+      sendResponse({ ok: true, reused: true });
+      return true;
+    }
+
+    connectSocket(tabId, nextState);
     sendResponse({ ok: true });
     return true;
   }
@@ -70,6 +83,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "bt:disconnect") {
     if (tabId) {
       disconnectSocket(tabId);
+      tabState.delete(tabId);
+      tabCache.delete(tabId);
     }
     sendResponse({ ok: true });
     return true;
@@ -88,6 +103,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   disconnectSocket(tabId);
   tabState.delete(tabId);
+  tabCache.delete(tabId);
 });
 
 function connectSocket(tabId, options) {
@@ -103,6 +119,11 @@ function connectSocket(tabId, options) {
       return;
     }
 
+    tabCache.set(tabId, {
+      socketEvent: "open",
+      lastMessages: [],
+    });
+
     ws.send(
       JSON.stringify({
         type: "join",
@@ -113,10 +134,7 @@ function connectSocket(tabId, options) {
       })
     );
 
-    postToTab(tabId, {
-      type: "bt:socket",
-      event: "open",
-    });
+    postSocketEvent(tabId, "open");
   });
 
   ws.addEventListener("message", (event) => {
@@ -127,6 +145,7 @@ function connectSocket(tabId, options) {
       return;
     }
 
+    rememberMessage(tabId, data);
     postToTab(tabId, {
       type: "bt:server-message",
       payload: data,
@@ -138,17 +157,12 @@ function connectSocket(tabId, options) {
       connections.delete(tabId);
     }
 
-    postToTab(tabId, {
-      type: "bt:socket",
-      event: "close",
-    });
+    postSocketEvent(tabId, "close");
+    scheduleReconnect(tabId);
   });
 
   ws.addEventListener("error", () => {
-    postToTab(tabId, {
-      type: "bt:socket",
-      event: "error",
-    });
+    postSocketEvent(tabId, "error");
   });
 }
 
@@ -162,4 +176,79 @@ function disconnectSocket(tabId) {
 
 function postToTab(tabId, message) {
   chrome.tabs.sendMessage(tabId, message).catch(() => {});
+}
+
+function postSocketEvent(tabId, event) {
+  const cache = tabCache.get(tabId) || { lastMessages: [] };
+  cache.socketEvent = event;
+  tabCache.set(tabId, cache);
+  postToTab(tabId, {
+    type: "bt:socket",
+    event,
+  });
+}
+
+function rememberMessage(tabId, message) {
+  const cache = tabCache.get(tabId) || { socketEvent: "close", lastMessages: [] };
+  const preserved = cache.lastMessages.filter((item) => !["joined", "presence", "navigate", "video_state"].includes(item.type));
+  if (["joined", "presence", "navigate", "video_state"].includes(message.type)) {
+    preserved.push(message);
+  }
+  cache.lastMessages = preserved.slice(-20);
+  tabCache.set(tabId, cache);
+}
+
+function flushTabState(tabId) {
+  const cache = tabCache.get(tabId);
+  if (!cache) {
+    return;
+  }
+
+  if (cache.socketEvent) {
+    postToTab(tabId, {
+      type: "bt:socket",
+      event: cache.socketEvent,
+    });
+  }
+
+  for (const payload of cache.lastMessages || []) {
+    postToTab(tabId, {
+      type: "bt:server-message",
+      payload,
+    });
+  }
+}
+
+function shouldReuseConnection(previousState, nextState, socket) {
+  if (!previousState || !socket || socket.readyState !== WebSocket.OPEN) {
+    return false;
+  }
+
+  return (
+    previousState.serverUrl === nextState.serverUrl &&
+    previousState.sessionId === nextState.sessionId &&
+    previousState.clientId === nextState.clientId &&
+    previousState.nickname === nextState.nickname &&
+    previousState.role === nextState.role
+  );
+}
+
+function scheduleReconnect(tabId) {
+  const desiredState = tabState.get(tabId);
+  if (!desiredState) {
+    return;
+  }
+
+  setTimeout(() => {
+    if (connections.has(tabId)) {
+      return;
+    }
+
+    const latestState = tabState.get(tabId);
+    if (!latestState) {
+      return;
+    }
+
+    connectSocket(tabId, latestState);
+  }, 1500);
 }
