@@ -36,6 +36,9 @@ const state = {
   dragOffsetY: 0,
   panelX: null,
   panelY: 88,
+  voicesReady: false,
+  hostSyncTimer: null,
+  guestEnforceTimer: null,
 };
 
 const elements = {};
@@ -83,6 +86,9 @@ async function init() {
   watchVideo();
   installGuestPlaybackGuard();
   installVisibilitySync();
+  initSpeechVoices();
+  startHostSyncLoop();
+  startGuestEnforceLoop();
   startUrlWatcher();
 
   if (state.sessionId) {
@@ -197,6 +203,25 @@ function buildPanel() {
   });
   root.querySelector('[data-role="settings"]').addEventListener("click", () => {
     state.settingsOpen = !state.settingsOpen;
+    render();
+  });
+  elements.speechEnabled.addEventListener("change", async () => {
+    state.speechEnabled = elements.speechEnabled.checked;
+    await persistUiState();
+    if (state.speechEnabled) {
+      speakPreview();
+    } else if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  });
+  elements.rememberPanel.addEventListener("change", async () => {
+    state.rememberPanel = elements.rememberPanel.checked;
+    if (!state.rememberPanel) {
+      state.panelX = null;
+      state.panelY = 88;
+      state.collapsed = false;
+    }
+    await persistUiState();
     render();
   });
 
@@ -495,6 +520,53 @@ function installVisibilitySync() {
   });
 }
 
+function startHostSyncLoop() {
+  if (state.hostSyncTimer) {
+    clearInterval(state.hostSyncTimer);
+  }
+
+  state.hostSyncTimer = window.setInterval(() => {
+    if (state.role !== "host" || !state.isConnected || Date.now() < state.suppressUntil) {
+      return;
+    }
+
+    const video = getVideoElement();
+    if (!video) {
+      return;
+    }
+
+    sendVideoState("heartbeat");
+  }, 1200);
+}
+
+function startGuestEnforceLoop() {
+  if (state.guestEnforceTimer) {
+    clearInterval(state.guestEnforceTimer);
+  }
+
+  state.guestEnforceTimer = window.setInterval(() => {
+    if (state.role !== "guest" || !state.lastRemoteVideoState) {
+      return;
+    }
+
+    const video = getVideoElement();
+    if (!video) {
+      return;
+    }
+
+    if (state.lastRemoteVideoState.paused && !video.paused && Date.now() > state.suppressUntil) {
+      state.suppressUntil = Date.now() + 600;
+      video.pause();
+      return;
+    }
+
+    if (!state.lastRemoteVideoState.paused && video.paused && Date.now() > state.suppressUntil) {
+      state.suppressUntil = Date.now() + 600;
+      video.play().catch(() => {});
+    }
+  }, 900);
+}
+
 function startUrlWatcher() {
   setInterval(() => {
     if (location.href !== state.lastUrl) {
@@ -717,21 +789,53 @@ function maybeSpeakMessage(message) {
     return;
   }
 
+  const voices = window.speechSynthesis.getVoices();
+  const preferredVoice =
+    voices.find((voice) => voice.lang?.toLowerCase().startsWith("zh")) ||
+    voices.find((voice) => voice.lang?.toLowerCase().startsWith("en")) ||
+    null;
+
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(`${message.nickname}说，${message.text}`);
   utterance.lang = "zh-CN";
+  if (preferredVoice) {
+    utterance.voice = preferredVoice;
+    utterance.lang = preferredVoice.lang || "zh-CN";
+  }
   utterance.rate = 1;
   utterance.pitch = 1;
   window.speechSynthesis.speak(utterance);
 }
 
-function persistUiState() {
-  chrome.storage.local.set({
+async function persistUiState() {
+  await chrome.storage.local.set({
     panelX: state.rememberPanel ? state.panelX : null,
     panelY: state.rememberPanel ? state.panelY : 88,
     collapsed: state.rememberPanel ? state.collapsed : false,
     rememberPanel: state.rememberPanel,
     speechEnabled: state.speechEnabled,
+  });
+}
+
+function initSpeechVoices() {
+  if (!window.speechSynthesis) {
+    return;
+  }
+
+  window.speechSynthesis.getVoices();
+  window.speechSynthesis.addEventListener("voiceschanged", () => {
+    state.voicesReady = true;
+  });
+}
+
+function speakPreview() {
+  if (!state.speechEnabled) {
+    return;
+  }
+
+  maybeSpeakMessage({
+    nickname: "提示",
+    text: "朗读已开启",
   });
 }
 
