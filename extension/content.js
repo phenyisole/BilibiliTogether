@@ -78,6 +78,18 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "toggle_panel") {
     state.panelVisible = !state.panelVisible;
     render();
+    return;
+  }
+
+  if (message.type === "bt:adopt-room") {
+    const desiredState = message.desiredState || {};
+    state.sessionId = String(desiredState.sessionId || state.sessionId);
+    state.clientId = String(desiredState.clientId || state.clientId);
+    state.role = desiredState.role === "host" ? "host" : "guest";
+    state.nickname = state.role === "host" ? "主" : "客";
+    state.serverUrl = normalizeServerUrl(desiredState.serverUrl || state.serverUrl);
+    setStatus(false, "正在接管同步...");
+    render();
   }
 });
 
@@ -425,6 +437,10 @@ function connect() {
   });
 }
 
+function isActiveHostControlPage() {
+  return state.role === "host" && state.isConnected && document.visibilityState === "visible" && isBilibiliUrl(location.href);
+}
+
 async function leaveRoom(options = {}) {
   const { hidePanel = false } = options;
   addDebugLog("leave", `退出房间 ${state.sessionId || "(空)"}`);
@@ -666,7 +682,7 @@ function installGuestPlaybackGuard() {
 
 function installVisibilitySync() {
   document.addEventListener("visibilitychange", () => {
-    if (state.role !== "host" || !state.isConnected) {
+    if (!isActiveHostControlPage()) {
       return;
     }
 
@@ -730,7 +746,7 @@ function startHostSyncLoop() {
   }
 
   state.hostSyncTimer = window.setInterval(() => {
-    if (state.role !== "host" || !state.isConnected || Date.now() < state.suppressUntil) {
+    if (!isActiveHostControlPage() || Date.now() < state.suppressUntil) {
       return;
     }
 
@@ -749,7 +765,7 @@ function startHostObserveLoop() {
   }
 
   state.hostObserveTimer = window.setInterval(() => {
-    if (state.role !== "host" || !state.isConnected || Date.now() < state.suppressUntil) {
+    if (!isActiveHostControlPage() || Date.now() < state.suppressUntil) {
       return;
     }
 
@@ -836,7 +852,7 @@ function startUrlWatcher() {
       const oldUrl = state.lastUrl;
       state.lastUrl = newUrl;
 
-      if (state.role === "host" && Date.now() > state.suppressUntil && isBilibiliUrl(newUrl) && oldUrl !== newUrl) {
+      if (isActiveHostControlPage() && Date.now() > state.suppressUntil && oldUrl !== newUrl) {
         sendNavigate(newUrl);
       }
 
@@ -868,7 +884,7 @@ function installHistoryHooks() {
 }
 
 function sendNavigate(url) {
-  if (state.role !== "host" || !state.isConnected) {
+  if (!isActiveHostControlPage()) {
     return;
   }
   if (!isBilibiliUrl(url)) {
@@ -879,7 +895,7 @@ function sendNavigate(url) {
 }
 
 function sendVideoState(action) {
-  if (state.role !== "host" || !state.isConnected || Date.now() < state.suppressUntil) {
+  if (!isActiveHostControlPage() || Date.now() < state.suppressUntil) {
     return;
   }
 
@@ -912,7 +928,7 @@ function sendVideoState(action) {
 }
 
 function syncCurrentVideoState() {
-  if (state.role !== "host") {
+  if (!isActiveHostControlPage()) {
     return;
   }
   sendVideoState("sync");

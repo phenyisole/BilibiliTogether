@@ -148,13 +148,13 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   const tab = await chrome.tabs.get(tabId).catch(() => null);
   if (tab?.url) {
-    syncHostNavigationToActiveTab(tab.url);
+    syncHostTabToActiveTab(tabId, tab.url);
   }
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete" && tab.active && tab.url) {
-    syncHostNavigationToActiveTab(tab.url);
+    syncHostTabToActiveTab(tabId, tab.url);
   }
 });
 
@@ -319,28 +319,52 @@ function scheduleReconnect(tabId, reconnectIntent) {
   }, 1500);
 }
 
-function syncHostNavigationToActiveTab(url) {
-  if (!isBilibiliUrl(url)) {
-    return;
-  }
-
+function getConnectedHostEntry() {
   for (const [tabId, desiredState] of tabState.entries()) {
     if (desiredState.role !== "host") {
       continue;
     }
 
-    const socket = connections.get(tabId);
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      continue;
-    }
-
-    socket.send(
-      JSON.stringify({
-        type: "navigate",
-        url,
-      })
-    );
+    return { tabId, desiredState };
   }
+
+  return null;
+}
+
+function syncHostTabToActiveTab(activeTabId, url) {
+  if (!isBilibiliUrl(url)) {
+    return;
+  }
+
+  const hostEntry = getConnectedHostEntry();
+  if (!hostEntry) {
+    return;
+  }
+
+  const { tabId: hostTabId, desiredState } = hostEntry;
+  if (hostTabId !== activeTabId) {
+    tabState.set(activeTabId, { ...desiredState });
+    postToTab(activeTabId, {
+      type: "bt:adopt-room",
+      desiredState: { ...desiredState },
+    });
+    connectSocket(activeTabId, desiredState);
+    disconnectSocket(hostTabId, { keepTabState: false, allowReconnect: false });
+    tabCache.delete(hostTabId);
+    return;
+  }
+
+  const socket = connections.get(activeTabId);
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    return;
+  }
+
+  socket.send(
+    JSON.stringify({
+      type: "navigate",
+      url,
+    })
+  );
 }
 
 function isBilibiliUrl(url) {
