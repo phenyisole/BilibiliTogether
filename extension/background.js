@@ -3,6 +3,8 @@ const DEFAULT_SETTINGS = {
   nickname: "用户",
   role: "guest",
   clientId: "",
+  serverUrl: "",
+  serverLocked: false,
 };
 
 const connections = new Map();
@@ -96,6 +98,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       ok: true,
       connected: Boolean(socket && socket.readyState === WebSocket.OPEN),
     });
+    return true;
+  }
+
+  if (message.type === "bt:test-server") {
+    const serverUrl = String(message.serverUrl || "");
+    testServerConnection(serverUrl)
+      .then((result) => sendResponse(result))
+      .catch(() => sendResponse({ ok: false, error: "test_failed" }));
     return true;
   }
 
@@ -272,4 +282,46 @@ function scheduleReconnect(tabId) {
 
     connectSocket(tabId, latestState);
   }, 1500);
+}
+
+function testServerConnection(serverUrl) {
+  return new Promise((resolve) => {
+    if (!serverUrl) {
+      resolve({ ok: false, error: "missing_server_url" });
+      return;
+    }
+
+    let settled = false;
+    const ws = new WebSocket(serverUrl);
+    const timeout = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      try {
+        ws.close();
+      } catch {}
+      resolve({ ok: false, error: "timeout" });
+    }, 3000);
+
+    const finish = (payload) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      try {
+        ws.close();
+      } catch {}
+      resolve(payload);
+    };
+
+    ws.addEventListener("open", () => finish({ ok: true }));
+    ws.addEventListener("error", () => finish({ ok: false, error: "connect_failed" }));
+    ws.addEventListener("close", () => {
+      if (!settled) {
+        finish({ ok: false, error: "closed" });
+      }
+    });
+  });
 }

@@ -4,6 +4,7 @@ const STORAGE_KEYS = [
   "clientId",
   "role",
   "serverUrl",
+  "serverLocked",
   "speechEnabled",
   "rememberPanel",
   "panelX",
@@ -25,6 +26,7 @@ const state = {
   clientId: "",
   role: "guest",
   serverUrl: "",
+  serverLocked: false,
   hostClientId: null,
   isConnected: false,
   users: [],
@@ -80,6 +82,7 @@ async function init() {
   state.role = stored.role === "host" ? "host" : "guest";
   state.nickname = state.role === "host" ? "主" : "客";
   state.serverUrl = normalizeServerUrl(stored.serverUrl || "");
+  state.serverLocked = Boolean(stored.serverLocked && state.serverUrl);
   state.speechEnabled = Boolean(stored.speechEnabled);
   state.rememberPanel = stored.rememberPanel !== false;
   state.collapsed = Boolean(stored.collapsed);
@@ -94,6 +97,7 @@ async function init() {
     clientId: state.clientId,
     role: state.role,
     serverUrl: state.serverUrl,
+    serverLocked: state.serverLocked,
     speechEnabled: state.speechEnabled,
     rememberPanel: state.rememberPanel,
     panelX: state.panelX,
@@ -150,7 +154,10 @@ function buildPanel() {
           <div class="bt-settings-title">常用设置</div>
           <label class="bt-toggle">
             <span>服务器地址</span>
-            <input data-role="serverUrl" type="text" placeholder="ws://localhost:8787" />
+            <div class="bt-server-row">
+              <input data-role="serverUrl" type="text" placeholder="ws://localhost:8787" />
+              <button class="bt-server-btn" data-role="serverToggle" type="button">记住</button>
+            </div>
           </label>
           <label class="bt-toggle">
             <span>收到对方消息时朗读</span>
@@ -210,6 +217,7 @@ function buildPanel() {
   elements.speechEnabled = root.querySelector('[data-role="speechEnabled"]');
   elements.rememberPanel = root.querySelector('[data-role="rememberPanel"]');
   elements.serverUrl = root.querySelector('[data-role="serverUrl"]');
+  elements.serverToggle = root.querySelector('[data-role="serverToggle"]');
   elements.chatList = root.querySelector('[data-role="chatList"]');
   elements.chatForm = root.querySelector('[data-role="chatForm"]');
   elements.chatInput = root.querySelector('[data-role="chatInput"]');
@@ -237,6 +245,7 @@ function buildPanel() {
     state.settingsOpen = !state.settingsOpen;
     render();
   });
+  elements.serverToggle.addEventListener("click", handleServerToggle);
   elements.speechEnabled.addEventListener("change", async () => {
     state.speechEnabled = elements.speechEnabled.checked;
     await persistUiState();
@@ -290,10 +299,12 @@ function render() {
   elements.hostRadio.checked = state.role === "host";
   elements.guestRadio.checked = state.role !== "host";
   elements.roleBadge.textContent = state.role === "host" ? "主人模式" : "客人模式";
-  elements.serverBadge.textContent = state.serverUrl ? shortServerLabel(state.serverUrl) : "未设置服务器";
+  elements.serverBadge.textContent = getServerBadgeText();
   elements.speechEnabled.checked = state.speechEnabled;
   elements.rememberPanel.checked = state.rememberPanel;
   elements.serverUrl.value = state.serverUrl;
+  elements.serverUrl.disabled = state.serverLocked;
+  elements.serverToggle.textContent = state.serverLocked ? "编辑" : "记住";
   elements.settingsPanel.style.display = state.settingsOpen ? "flex" : "none";
   elements.body.style.display = state.collapsed ? "none" : "flex";
   root.querySelector('[data-role="collapse"]').textContent = state.collapsed ? "+" : "-";
@@ -311,12 +322,12 @@ async function saveSettings() {
   state.sessionId = elements.sessionId.value.trim();
   state.role = elements.hostRadio.checked ? "host" : "guest";
   state.nickname = state.role === "host" ? "主" : "客";
-  state.serverUrl = normalizeServerUrl(elements.serverUrl.value);
   state.speechEnabled = elements.speechEnabled.checked;
   state.rememberPanel = elements.rememberPanel.checked;
 
-  if (!state.serverUrl) {
-    setStatus(false, "请先在设置里填写服务器地址");
+  const serverReady = await ensureServerReady();
+  if (!serverReady.ok) {
+    setStatus(false, serverReady.message);
     render();
     return;
   }
@@ -327,6 +338,7 @@ async function saveSettings() {
     clientId: state.clientId,
     role: state.role,
     serverUrl: state.serverUrl,
+    serverLocked: state.serverLocked,
     speechEnabled: state.speechEnabled,
     rememberPanel: state.rememberPanel,
     panelX: state.rememberPanel ? state.panelX : null,
@@ -390,6 +402,7 @@ async function leaveRoom(options = {}) {
     clientId: state.clientId,
     role: state.role,
     serverUrl: state.serverUrl,
+    serverLocked: state.serverLocked,
   });
   render();
 }
@@ -908,6 +921,19 @@ function roleShortText(role) {
   return role === "host" ? "主" : "客";
 }
 
+function getServerBadgeText() {
+  if (state.isConnected && state.serverUrl) {
+    return `已连接 ${shortServerLabel(state.serverUrl)}`;
+  }
+  if (state.serverLocked && state.serverUrl) {
+    return shortServerLabel(state.serverUrl);
+  }
+  if (state.serverUrl) {
+    return "未连接服务器";
+  }
+  return "未设置服务器";
+}
+
 function normalizeServerUrl(input) {
   const value = String(input || "").trim();
   if (!value) {
@@ -932,6 +958,46 @@ function shortServerLabel(url) {
   } catch {
     return "未设置服务器";
   }
+}
+
+async function handleServerToggle() {
+  if (state.serverLocked) {
+    state.serverLocked = false;
+    await chrome.storage.local.set({ serverLocked: false });
+    setStatus(false, "服务器地址可编辑");
+    render();
+    return;
+  }
+
+  const result = await ensureServerReady();
+  setStatus(result.ok, result.message);
+  render();
+}
+
+async function ensureServerReady() {
+  const nextServerUrl = normalizeServerUrl(elements.serverUrl?.value || state.serverUrl);
+  if (!nextServerUrl) {
+    state.serverLocked = false;
+    return { ok: false, message: "请填写正确的服务器地址" };
+  }
+
+  const response = await chrome.runtime.sendMessage({
+    type: "bt:test-server",
+    serverUrl: nextServerUrl,
+  });
+
+  if (!response?.ok) {
+    state.serverLocked = false;
+    return { ok: false, message: "服务器连接失败" };
+  }
+
+  state.serverUrl = nextServerUrl;
+  state.serverLocked = true;
+  await chrome.storage.local.set({
+    serverUrl: state.serverUrl,
+    serverLocked: true,
+  });
+  return { ok: true, message: "服务器已连接" };
 }
 
 function resolveChatLabel(message) {
