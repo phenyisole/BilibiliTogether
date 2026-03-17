@@ -175,9 +175,9 @@ function buildPanel() {
           </div>
         </div>
         <div class="bt-actions">
-          <button data-role="save">进入房间</button>
-          <button data-role="syncNow" class="secondary">主人同步</button>
-          <button data-role="leave" class="secondary">退出房间</button>
+          <button data-role="save">进入</button>
+          <button data-role="syncNow" class="secondary">同步</button>
+          <button data-role="leave" class="secondary">退出</button>
         </div>
         <div class="bt-meta-card">
           <div class="bt-presence" data-role="presence">在线人数：0/2</div>
@@ -270,7 +270,7 @@ function render() {
     return;
   }
 
-  elements.panel.style.display = state.panelVisible ? "flex" : "none";
+  elements.panel.style.display = state.panelVisible && !state.collapsed ? "flex" : "none";
   elements.miniLauncher.style.display = !state.panelVisible || state.collapsed ? "inline-flex" : "none";
   elements.panel.style.left = state.panelX == null ? "auto" : `${state.panelX}px`;
   elements.panel.style.right = state.panelX == null ? "20px" : "auto";
@@ -515,8 +515,8 @@ function appendChatMessage(message, options = {}) {
   }
   const time = new Date(message.sentAt || Date.now()).toLocaleTimeString();
   item.innerHTML = `<div class="bt-chat-meta"><strong>${escapeHtml(message.nickname || "Guest")}</strong><span>${time}</span></div><div class="bt-chat-text">${escapeHtml(message.text || "")}</div>`;
+  elements.chatList.innerHTML = "";
   elements.chatList.appendChild(item);
-  elements.chatList.scrollTop = elements.chatList.scrollHeight;
 
   if (options.speak) {
     maybeSpeakMessage(message);

@@ -54,7 +54,8 @@
 .bt-panel-collapsed {
   width: 0;
   height: 0;
-  overflow: visible;
+  display: none;
+  overflow: hidden;
   border-color: transparent;
   box-shadow: none;
   background: transparent;
@@ -68,8 +69,8 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-width: 108px;
-  height: 48px;
+  min-width: 116px;
+  height: 50px;
   padding: 0 18px;
   border: 1px solid rgba(255, 255, 255, 0.76);
   border-radius: 999px;
@@ -239,9 +240,9 @@
 }
 
 .bt-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: nowrap;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .bt-role-row {
@@ -271,15 +272,16 @@
 
 .bt-actions button,
 .bt-chat-form button {
-  height: 46px;
+  height: 48px;
   border: 1px solid transparent;
-  border-radius: 16px;
+  border-radius: 18px;
   background: linear-gradient(135deg, var(--bt-accent), #f3914c);
   color: #fff9f5;
   font-size: 13px;
   cursor: pointer;
   font-weight: 700;
   box-shadow: 0 12px 24px rgba(239, 108, 77, 0.18);
+  white-space: nowrap;
 }
 
 .bt-actions .secondary {
@@ -312,17 +314,16 @@
 }
 
 .bt-chat-list {
-  flex: 1;
-  min-height: 0;
+  flex: 0 0 auto;
+  min-height: 76px;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 6px 2px;
-  overflow-y: auto;
+  align-items: stretch;
+  padding: 0;
 }
 
 .bt-chat-item {
-  padding: 12px 13px;
+  width: 100%;
+  padding: 14px 15px;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.66);
   border: 1px solid rgba(255, 255, 255, 0.74);
@@ -366,7 +367,7 @@
 .bt-chat-form {
   flex: 0 0 auto;
   display: flex;
-  gap: 8px;
+  gap: 10px;
   margin-top: auto;
   padding: 12px;
   border-radius: 20px;
@@ -383,6 +384,11 @@
   background: rgba(255, 255, 255, 0.72);
   color: var(--bt-text);
   outline: none;
+}
+
+.bt-chat-form button {
+  min-width: 74px;
+  padding: 0 16px;
 }
 
 .bt-export-btn {
@@ -423,10 +429,10 @@
   }
 
   .bt-actions {
-    flex-wrap: wrap;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .bt-actions button {
-    flex: 1 1 100px;
+    min-width: 0;
   }
 }
