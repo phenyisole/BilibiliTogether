@@ -512,6 +512,10 @@ function handleServerMessage(message) {
   }
 
   if (message.type === "peer_joined") {
+    if (message.role === "host" && message.clientId) {
+      state.hostClientId = message.clientId;
+      render();
+    }
     appendPresenceMessage(message.role === "host" ? "主" : "客", "加入了房间");
     return;
   }
@@ -530,7 +534,7 @@ function handleServerMessage(message) {
   }
 
   if (message.type === "navigate") {
-    if (state.role === "guest" && message.senderId === state.hostClientId && message.url && message.url !== location.href) {
+    if (state.role === "guest" && shouldAcceptHostMessage(message) && message.url && message.url !== location.href) {
       addDebugLog("navigate:recv", `收到页面跳转 ${shortUrl(message.url)}`);
       navigateTo(message.url);
     }
@@ -538,7 +542,7 @@ function handleServerMessage(message) {
   }
 
   if (message.type === "video_state") {
-    if (state.role === "guest" && message.senderId === state.hostClientId) {
+    if (state.role === "guest" && shouldAcceptHostMessage(message)) {
       if (message.url && message.url !== location.href) {
         navigateTo(message.url);
         return;
@@ -578,6 +582,21 @@ function setStatus(connected, text) {
   if (elements.status) {
     elements.status.textContent = text;
   }
+}
+
+function shouldAcceptHostMessage(message) {
+  if (!message?.senderId) {
+    return false;
+  }
+
+  if (!state.hostClientId) {
+    state.hostClientId = message.senderId;
+    addDebugLog("host:recover", `通过 ${message.type} 恢复主人 ${message.senderId}`);
+    render();
+    return true;
+  }
+
+  return message.senderId === state.hostClientId;
 }
 
 function appendSystemMessage(text) {
