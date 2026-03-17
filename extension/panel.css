@@ -30,13 +30,13 @@
 .bt-panel {
   position: fixed;
   width: 272px;
-  height: min(432px, calc(100vh - 96px));
+  height: min(304px, calc(100vh - 96px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
   resize: both;
   min-width: 248px;
-  min-height: 292px;
+  min-height: 228px;
   max-width: min(680px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
   border: 1px solid rgba(255, 255, 255, 0.72);
@@ -241,27 +241,16 @@
 
 .bt-inline-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(110px, 0.8fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   align-items: stretch;
-}
-
-.bt-actions {
-  display: grid;
-  gap: 6px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.bt-role-row {
-  display: flex;
-  gap: 6px;
 }
 
 .bt-role-option {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 40px;
+  min-height: 34px;
   padding: 0 10px;
   border: 1px solid rgba(136, 86, 54, 0.12);
   border-radius: 12px;
@@ -272,12 +261,18 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48);
 }
 
+.bt-inline-cell,
+.bt-inline-action {
+  width: 100%;
+  justify-content: center;
+}
+
 .bt-role-option input {
   margin: 0;
   accent-color: var(--bt-accent);
 }
 
-.bt-actions button,
+.bt-inline-action,
 .bt-chat-form button {
   height: 34px;
   border: 1px solid transparent;
@@ -291,7 +286,7 @@
   white-space: nowrap;
 }
 
-.bt-actions .secondary {
+.bt-inline-action.secondary {
   background: rgba(255, 255, 255, 0.62);
   color: var(--bt-text);
   border-color: rgba(136, 86, 54, 0.12);
@@ -421,7 +416,7 @@
   box-shadow: 0 0 0 4px rgba(239, 108, 77, 0.12);
 }
 
-.bt-actions button:hover,
+.bt-inline-action:hover,
 .bt-chat-form button:hover,
 .bt-mini-launcher:hover,
 .bt-export-btn:hover,
@@ -441,11 +436,7 @@
     grid-template-columns: 1fr;
   }
 
-  .bt-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .bt-actions button {
-    min-width: 0;
+  .bt-inline-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }

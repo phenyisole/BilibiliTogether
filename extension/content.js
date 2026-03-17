@@ -46,8 +46,8 @@ const state = {
   dragOffsetY: 0,
   panelX: null,
   panelY: 88,
-  panelWidth: 312,
-  panelHeight: 540,
+  panelWidth: 272,
+  panelHeight: 304,
   voicesReady: false,
   hostSyncTimer: null,
   guestEnforceTimer: null,
@@ -83,8 +83,8 @@ async function init() {
   state.collapsed = Boolean(stored.collapsed);
   state.panelX = typeof stored.panelX === "number" ? stored.panelX : null;
   state.panelY = typeof stored.panelY === "number" ? stored.panelY : 88;
-  state.panelWidth = typeof stored.panelWidth === "number" ? stored.panelWidth : 312;
-  state.panelHeight = typeof stored.panelHeight === "number" ? stored.panelHeight : 540;
+  state.panelWidth = typeof stored.panelWidth === "number" ? stored.panelWidth : 272;
+  state.panelHeight = typeof stored.panelHeight === "number" ? stored.panelHeight : 304;
 
   await chrome.storage.local.set({
     sessionId: state.sessionId,
@@ -162,20 +162,16 @@ function buildPanel() {
         <div class="bt-field">
           <label>身份</label>
           <div class="bt-inline-row">
-            <div class="bt-role-row">
-              <label class="bt-role-option">
-                <input data-role="hostRadio" type="radio" name="bt-role" value="host" />
-                <span>主人</span>
-              </label>
-              <label class="bt-role-option">
-                <input data-role="guestRadio" type="radio" name="bt-role" value="guest" />
-                <span>客人</span>
-              </label>
-            </div>
-            <div class="bt-actions">
-              <button data-role="save">进入</button>
-              <button data-role="leave" class="secondary">退出</button>
-            </div>
+            <label class="bt-role-option bt-inline-cell">
+              <input data-role="hostRadio" type="radio" name="bt-role" value="host" />
+              <span>主人</span>
+            </label>
+            <label class="bt-role-option bt-inline-cell">
+              <input data-role="guestRadio" type="radio" name="bt-role" value="guest" />
+              <span>客人</span>
+            </label>
+            <button data-role="save" class="bt-inline-action" type="button">进入</button>
+            <button data-role="leave" class="bt-inline-action secondary" type="button">退出</button>
           </div>
         </div>
         <div class="bt-meta-card">
@@ -246,8 +242,8 @@ function buildPanel() {
     if (!state.rememberPanel) {
       state.panelX = null;
       state.panelY = 88;
-      state.panelWidth = 312;
-      state.panelHeight = 540;
+      state.panelWidth = 272;
+      state.panelHeight = 304;
       state.collapsed = false;
     }
     await persistUiState();
@@ -316,8 +312,8 @@ async function saveSettings() {
     rememberPanel: state.rememberPanel,
     panelX: state.rememberPanel ? state.panelX : null,
     panelY: state.rememberPanel ? state.panelY : 88,
-    panelWidth: state.rememberPanel ? state.panelWidth : 312,
-    panelHeight: state.rememberPanel ? state.panelHeight : 540,
+    panelWidth: state.rememberPanel ? state.panelWidth : 272,
+    panelHeight: state.rememberPanel ? state.panelHeight : 304,
     collapsed: state.rememberPanel ? state.collapsed : false,
   });
 
@@ -1015,8 +1011,8 @@ async function persistUiState() {
   await chrome.storage.local.set({
     panelX: state.rememberPanel ? state.panelX : null,
     panelY: state.rememberPanel ? state.panelY : 88,
-    panelWidth: state.rememberPanel ? state.panelWidth : 312,
-    panelHeight: state.rememberPanel ? state.panelHeight : 540,
+    panelWidth: state.rememberPanel ? state.panelWidth : 272,
+    panelHeight: state.rememberPanel ? state.panelHeight : 304,
     collapsed: state.rememberPanel ? state.collapsed : false,
     rememberPanel: state.rememberPanel,
     speechEnabled: state.speechEnabled,
