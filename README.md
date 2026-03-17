@@ -2,76 +2,65 @@
 
 一个只支持 B 站网页视频的双人同步看视频 MVP。
 
-## MVP 范围
+## 功能范围
 
-- 只支持 Bilibili 网页视频页面
-- 只支持双人固定会话
-- 明确区分 Host / Guest，只有 Host 控制同步
-- 支持播放、暂停、拖动进度同步
-- 支持 B 站站内页面自动跟随
-- 支持基础聊天
-- 不支持语音、不转发视频流、不做全网通用
+- 只支持 Bilibili 网页页面
+- 只支持双人固定房间
+- Host / Guest 两种角色
+- Host 控制页面跳转、播放、暂停、拖动和进度同步
+- 基础聊天
+- 不传视频流，不做语音，不做全网平台适配
 
 ## 项目结构
 
-- `server/`: Node.js WebSocket 信令/聊天服务
+- `server/`: Node.js WebSocket 信令服务
 - `extension/`: Chromium 扩展
 
-## 本地启动
+## 快速开始
+
+### 1. 本地启动服务端
 
 ```bash
 npm install
 npm run dev
 ```
 
-扩展内已写死 WebSocket 地址为 `ws://106.53.151.206:8787`，用户不需要手动输入服务器地址。
+默认监听：
 
-## 加载扩展
+- `http://127.0.0.1:8787/healthz`
+- `ws://127.0.0.1:8787`
 
-1. 打开 Chrome/Edge 的扩展管理页
-2. 开启开发者模式
-3. 选择“加载已解压的扩展程序”
-4. 选中 `extension/`
-5. 点击扩展图标，在 B 站视频页打开侧边面板
+### 2. 加载扩展
 
-## 部署到 Chrome
+1. 打开 `chrome://extensions/` 或 Edge 扩展管理页
+2. 开启“开发者模式”
+3. 点击“加载已解压的扩展程序”
+4. 选择 `extension/`
+5. 打开任意 B 站页面，点击扩展图标打开面板
 
-如果你只是想先装到 Chrome 里自己和朋友测试，直接用“加载已解压的扩展程序”就行。
+### 3. 配置服务器地址
 
-如果你后面想正式发到 Chrome Web Store，大致流程是：
+扩展不会内置任何公开服务器地址，需要在设置里手动填写：
 
-1. 把 `extension/` 目录单独打成 zip
-2. 注册 Chrome Web Store Developer
-3. 新建扩展项目并上传 zip
-4. 补齐图标、截图、描述和隐私说明
-5. 提交审核
+- 本地调试：`ws://127.0.0.1:8787`
+- 云服务器未上 HTTPS：`ws://你的服务器IP:8787`
+- 已接入 HTTPS 反代：`wss://你的域名`
 
-MVP 阶段建议先用本地加载，最快。
-
-## 使用方式
+### 4. 双人使用
 
 1. 两个人都安装扩展
-2. 打开任意 B 站页面，首页也可以
-3. 点击扩展图标打开侧边面板
-4. 填同一个 `Room Key`
-5. 一方选择 `Host`，另一方选择 `Guest`
-6. 各自填自己的 `Nickname`
-7. 点击 `Join Room`
-8. Host 在 B 站站内切到任何页面，Guest 都会自动跟随
-9. Host 播放、暂停、拖动视频时，Guest 会自动同步
-10. 如果 Host 离开 B 站，Guest 会停留在当前页，不会跟着跳走
+2. 两个人都在设置里填同一个 WebSocket 服务器地址
+3. 打开 B 站任意页面
+4. 填相同的房间秘钥
+5. 一方选 `主人`，另一方选 `客人`
+6. 点击 `进入`
+7. 主人在 B 站站内切页、播放、暂停、拖动时，客人会自动跟随
 
-## 消息协议
+## 服务端部署
 
-- `join`
-- `presence`
-- `video_state`
-- `navigate`
-- `chat_message`
+下面是一套最小可用部署流程，适合 Ubuntu 22.04。
 
-## 服务端部署建议
-
-腾讯云 Ubuntu 22.04 上跑 MVP 的最小流程：
+### 1. 安装依赖
 
 ```bash
 sudo apt update
@@ -81,33 +70,76 @@ sudo apt install -y nodejs
 sudo npm install -g pm2
 ```
 
-启动服务：
+### 2. 获取项目并安装
 
 ```bash
+git clone <your-repo-url>
+cd BilibiliTogether
 npm install
+```
+
+### 3. 启动服务
+
+```bash
 PORT=8787 pm2 start server/index.js --name bilibili-together
 pm2 save
 pm2 startup
 ```
 
-Nginx 可以后续再反代到 `8787`，并加上域名和 HTTPS/WSS。
+### 4. 健康检查
 
-## 已部署服务器
+```bash
+curl http://127.0.0.1:8787/healthz
+```
 
-当前服务地址：
+正常应返回：
 
-- `http://106.53.151.206/healthz`
-- `ws://106.53.151.206:8787`
+```json
+{"ok":true,"rooms":0}
+```
 
-服务器运行方式：
+### 5. Nginx 反代示例
 
-- 项目目录：`/home/ubuntu/BilibiliTogether`
-- PM2 进程名：`bilibili-together`
-- Nginx 80 端口反代到 `127.0.0.1:8787`
+如果你想通过 `80/443` 暴露服务，可以把 WebSocket 反代到 `127.0.0.1:8787`。
 
-## 当前已知限制
+```nginx
+server {
+    listen 80;
+    server_name your-domain-or-ip;
+
+    location / {
+        proxy_pass http://127.0.0.1:8787;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+}
+```
+
+如果你后面接了 HTTPS，扩展里就应该填写 `wss://...`。
+
+## 打包扩展
+
+开发阶段推荐直接“加载已解压的扩展程序”。
+
+只有在这些场景下才需要“打包扩展程序”：
+
+- 你想生成 `.crx` 发给别人手动安装
+- 你想固定扩展 ID
+- 你准备做正式发布前的打包测试
+
+## 消息协议
+
+- `join`
+- `presence`
+- `video_state`
+- `navigate`
+- `chat_message`
+
+## 当前限制
 
 - 依赖页面中存在可控的 `video` 元素
-- B 站部分番剧页和特殊播放器页面可能存在选择器或权限差异
-- 现在是固定双人房间，没有鉴权、没有持久化、没有消息回执
-- 还没处理更复杂的抢控制权、弱网重连一致性和边界状态
+- B 站部分番剧页和特殊播放器页面可能存在选择器差异
+- 目前没有鉴权、持久化、消息回执
+- 没有处理复杂抢控制权、断线后强一致恢复等问题

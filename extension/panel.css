@@ -211,9 +211,25 @@
   color: var(--bt-text-muted);
 }
 
+.bt-toggle span {
+  flex: 0 0 auto;
+}
+
 .bt-toggle input {
   width: 16px;
   height: 16px;
+}
+
+.bt-toggle input[type="text"] {
+  flex: 1 1 auto;
+  width: auto;
+  height: 32px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid rgba(136, 86, 54, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--bt-text);
 }
 
 .bt-field {

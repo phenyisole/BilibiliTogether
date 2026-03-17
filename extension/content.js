@@ -1,9 +1,9 @@
-const SERVER_URL = "ws://106.53.151.206:8787";
 const STORAGE_KEYS = [
   "sessionId",
   "nickname",
   "clientId",
   "role",
+  "serverUrl",
   "speechEnabled",
   "rememberPanel",
   "panelX",
@@ -24,6 +24,7 @@ const state = {
   nickname: "",
   clientId: "",
   role: "guest",
+  serverUrl: "",
   hostClientId: null,
   isConnected: false,
   users: [],
@@ -78,6 +79,7 @@ async function init() {
   state.clientId = stored.clientId || crypto.randomUUID();
   state.role = stored.role === "host" ? "host" : "guest";
   state.nickname = state.role === "host" ? "主" : "客";
+  state.serverUrl = normalizeServerUrl(stored.serverUrl || "");
   state.speechEnabled = Boolean(stored.speechEnabled);
   state.rememberPanel = stored.rememberPanel !== false;
   state.collapsed = Boolean(stored.collapsed);
@@ -91,6 +93,7 @@ async function init() {
     nickname: state.nickname,
     clientId: state.clientId,
     role: state.role,
+    serverUrl: state.serverUrl,
     speechEnabled: state.speechEnabled,
     rememberPanel: state.rememberPanel,
     panelX: state.panelX,
@@ -146,6 +149,10 @@ function buildPanel() {
         <div class="bt-settings" data-role="settingsPanel">
           <div class="bt-settings-title">常用设置</div>
           <label class="bt-toggle">
+            <span>服务器地址</span>
+            <input data-role="serverUrl" type="text" placeholder="ws://localhost:8787" />
+          </label>
+          <label class="bt-toggle">
             <span>收到对方消息时朗读</span>
             <input data-role="speechEnabled" type="checkbox" />
           </label>
@@ -194,6 +201,7 @@ function buildPanel() {
   elements.hostRadio = root.querySelector('[data-role="hostRadio"]');
   elements.guestRadio = root.querySelector('[data-role="guestRadio"]');
   elements.roleBadge = root.querySelector('[data-role="roleBadge"]');
+  elements.serverBadge = root.querySelector('[data-role="serverBadge"]');
   elements.presence = root.querySelector('[data-role="presence"]');
   elements.hint = root.querySelector('[data-role="hint"]');
   elements.body = root.querySelector('[data-role="body"]');
@@ -201,6 +209,7 @@ function buildPanel() {
   elements.settingsPanel = root.querySelector('[data-role="settingsPanel"]');
   elements.speechEnabled = root.querySelector('[data-role="speechEnabled"]');
   elements.rememberPanel = root.querySelector('[data-role="rememberPanel"]');
+  elements.serverUrl = root.querySelector('[data-role="serverUrl"]');
   elements.chatList = root.querySelector('[data-role="chatList"]');
   elements.chatForm = root.querySelector('[data-role="chatForm"]');
   elements.chatInput = root.querySelector('[data-role="chatInput"]');
@@ -281,8 +290,10 @@ function render() {
   elements.hostRadio.checked = state.role === "host";
   elements.guestRadio.checked = state.role !== "host";
   elements.roleBadge.textContent = state.role === "host" ? "主人模式" : "客人模式";
+  elements.serverBadge.textContent = state.serverUrl ? shortServerLabel(state.serverUrl) : "未设置服务器";
   elements.speechEnabled.checked = state.speechEnabled;
   elements.rememberPanel.checked = state.rememberPanel;
+  elements.serverUrl.value = state.serverUrl;
   elements.settingsPanel.style.display = state.settingsOpen ? "flex" : "none";
   elements.body.style.display = state.collapsed ? "none" : "flex";
   root.querySelector('[data-role="collapse"]').textContent = state.collapsed ? "+" : "-";
@@ -300,14 +311,22 @@ async function saveSettings() {
   state.sessionId = elements.sessionId.value.trim();
   state.role = elements.hostRadio.checked ? "host" : "guest";
   state.nickname = state.role === "host" ? "主" : "客";
+  state.serverUrl = normalizeServerUrl(elements.serverUrl.value);
   state.speechEnabled = elements.speechEnabled.checked;
   state.rememberPanel = elements.rememberPanel.checked;
+
+  if (!state.serverUrl) {
+    setStatus(false, "请先在设置里填写服务器地址");
+    render();
+    return;
+  }
 
   await chrome.storage.local.set({
     sessionId: state.sessionId,
     nickname: state.nickname,
     clientId: state.clientId,
     role: state.role,
+    serverUrl: state.serverUrl,
     speechEnabled: state.speechEnabled,
     rememberPanel: state.rememberPanel,
     panelX: state.rememberPanel ? state.panelX : null,
@@ -330,13 +349,18 @@ function connect() {
   if (!state.sessionId) {
     return;
   }
+  if (!state.serverUrl) {
+    setStatus(false, "请先在设置里填写服务器地址");
+    render();
+    return;
+  }
 
-  addDebugLog("connect", `准备连接房间 ${state.sessionId}，身份：${roleText(state.role)}`);
+  addDebugLog("connect", `准备连接 ${state.serverUrl} 房间 ${state.sessionId}，身份：${roleText(state.role)}`);
   setStatus(false, "连接中...");
   render();
   chrome.runtime.sendMessage({
     type: "bt:connect",
-    serverUrl: SERVER_URL,
+    serverUrl: state.serverUrl,
     sessionId: state.sessionId,
     clientId: state.clientId,
     nickname: state.nickname,
@@ -365,6 +389,7 @@ async function leaveRoom(options = {}) {
     nickname: state.nickname,
     clientId: state.clientId,
     role: state.role,
+    serverUrl: state.serverUrl,
   });
   render();
 }
@@ -881,6 +906,32 @@ function roleText(role) {
 
 function roleShortText(role) {
   return role === "host" ? "主" : "客";
+}
+
+function normalizeServerUrl(input) {
+  const value = String(input || "").trim();
+  if (!value) {
+    return "";
+  }
+
+  try {
+    const url = new URL(value);
+    if (!["ws:", "wss:"].includes(url.protocol)) {
+      return "";
+    }
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return "";
+  }
+}
+
+function shortServerLabel(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.host;
+  } catch {
+    return "未设置服务器";
+  }
 }
 
 function resolveChatLabel(message) {
