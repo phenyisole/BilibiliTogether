@@ -141,12 +141,18 @@ wss.on("connection", (ws) => {
       joinedSessionId = sessionId;
       joinedClientId = clientId;
 
+      const existingClient = room.clients.get(clientId);
       room.clients.set(clientId, {
         ws,
         clientId,
         nickname,
         role,
       });
+      if (existingClient && existingClient.ws !== ws) {
+        try {
+          existingClient.ws.close();
+        } catch {}
+      }
       if (role === "host") {
         room.hostClientId = clientId;
       }
@@ -251,7 +257,27 @@ wss.on("connection", (ws) => {
 
       room.chatHistory.push(message);
       room.chatHistory = room.chatHistory.slice(-100);
-      broadcast(joinedSessionId, message);
+      broadcast(joinedSessionId, message, joinedClientId);
+      return;
+    }
+
+    if (data.type === "sync_ack") {
+      const payload = {
+        type: "sync_ack",
+        sessionId: joinedSessionId,
+        senderId: joinedClientId,
+        kind: String(data.kind || "video"),
+        url: String(data.url || ""),
+        currentTime: Number(data.currentTime || 0),
+        sentAt: Date.now(),
+      };
+
+      if (room.hostClientId) {
+        const hostClient = room.clients.get(room.hostClientId);
+        if (hostClient) {
+          safeSend(hostClient.ws, payload);
+        }
+      }
       return;
     }
 
@@ -265,6 +291,11 @@ wss.on("connection", (ws) => {
 
     const room = rooms.get(joinedSessionId);
     if (!room) {
+      return;
+    }
+
+    const existingClient = room.clients.get(joinedClientId);
+    if (existingClient?.ws !== ws) {
       return;
     }
 

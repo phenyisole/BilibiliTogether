@@ -400,14 +400,13 @@ async function leaveRoom(options = {}) {
   state.lastRemoteVideoState = null;
   state.lastObservedVideoState = null;
   state.chatMessages = [];
-  state.sessionId = "";
   state.chatListClearedAt = Date.now();
   clearChatIfFreshJoin(true);
   setStatus(false, "已退出房间");
   state.panelVisible = !hidePanel;
   state.collapsed = false;
   await chrome.storage.local.set({
-    sessionId: "",
+    sessionId: state.sessionId,
     nickname: state.nickname,
     clientId: state.clientId,
     role: state.role,
@@ -468,7 +467,7 @@ function handleServerMessage(message) {
 
   if (message.type === "chat_message") {
     appendChatMessage(message, {
-      speak: message.senderId !== state.clientId,
+      speak: true,
     });
     return;
   }
@@ -494,6 +493,11 @@ function handleServerMessage(message) {
       state.lastRemoteVideoState = message;
       applyRemoteVideoState(message);
     }
+    return;
+  }
+
+  if (message.type === "sync_ack" && state.role === "host") {
+    setStatus(true, `客人已同步 ${new Date(message.sentAt || Date.now()).toLocaleTimeString()}`);
     return;
   }
 
@@ -918,6 +922,15 @@ function applyRemoteVideoState(message) {
       }
     }, 800);
   }
+
+  if (state.role === "guest") {
+    sendToBackground({
+      type: "sync_ack",
+      kind: "video",
+      url: message.url || location.href,
+      currentTime: Number(message.currentTime || 0),
+    });
+  }
 }
 
 function navigateTo(url) {
@@ -926,6 +939,15 @@ function navigateTo(url) {
   }
   state.suppressUntil = Date.now() + 3000;
   location.href = url;
+  if (state.role === "guest") {
+    window.setTimeout(() => {
+      sendToBackground({
+        type: "sync_ack",
+        kind: "navigate",
+        url,
+      });
+    }, 1200);
+  }
 }
 
 function getVideoElement() {
