@@ -29,18 +29,18 @@
 
 .bt-panel {
   position: fixed;
-  width: 312px;
-  height: min(540px, calc(100vh - 88px));
+  width: 272px;
+  height: min(432px, calc(100vh - 96px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
   resize: both;
-  min-width: 292px;
-  min-height: 330px;
+  min-width: 248px;
+  min-height: 292px;
   max-width: min(680px, calc(100vw - 16px));
   max-height: calc(100vh - 16px);
   border: 1px solid rgba(255, 255, 255, 0.72);
-  border-radius: 28px;
+  border-radius: 24px;
   background:
     radial-gradient(circle at top left, rgba(239, 108, 77, 0.18), transparent 34%),
     radial-gradient(circle at top right, rgba(250, 210, 130, 0.28), transparent 44%),
@@ -68,10 +68,10 @@
   display: none;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  min-width: 102px;
-  height: 44px;
-  padding: 0 14px;
+  gap: 8px;
+  min-width: 92px;
+  height: 40px;
+  padding: 0 12px;
   border: 1px solid rgba(255, 255, 255, 0.76);
   border-radius: 999px;
   background:
@@ -99,7 +99,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 15px 15px 13px;
+  padding: 12px 12px 10px;
   background:
     linear-gradient(135deg, rgba(247, 134, 95, 0.96), rgba(227, 96, 84, 0.94) 55%, rgba(186, 101, 108, 0.92));
   color: var(--bt-text);
@@ -110,11 +110,11 @@
 .bt-header-copy {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .bt-kicker {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -123,7 +123,7 @@
 
 .bt-header-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
 }
 
 .bt-icon-btn {
@@ -131,25 +131,25 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   background: rgba(255, 248, 243, 0.22);
   color: #fff8f2;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1;
 }
 
 .bt-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: #fffaf5;
 }
 
 .bt-status {
-  font-size: 11px;
+  font-size: 10px;
   color: rgba(255, 246, 239, 0.88);
 }
 
@@ -158,22 +158,22 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 11px;
-  padding: 14px;
+  gap: 8px;
+  padding: 10px;
 }
 
 .bt-hero {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
 .bt-hero-chip {
-  padding: 6px 10px;
+  padding: 4px 8px;
   border-radius: 999px;
   background: var(--bt-secondary-soft);
   color: var(--bt-secondary);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   border: 1px solid rgba(31, 109, 120, 0.16);
 }
@@ -187,17 +187,17 @@
 .bt-settings {
   display: none;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.72);
-  border-radius: 20px;
+  border-radius: 16px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 245, 238, 0.88));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.58);
 }
 
 .bt-settings-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--bt-secondary);
 }
@@ -206,8 +206,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  font-size: 12px;
+  gap: 10px;
+  font-size: 11px;
   color: var(--bt-text-muted);
 }
 
@@ -219,20 +219,20 @@
 .bt-field {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 5px;
 }
 
 .bt-field label {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--bt-text-muted);
   font-weight: 700;
 }
 
 .bt-field input {
-  height: 40px;
-  padding: 0 12px;
+  height: 34px;
+  padding: 0 10px;
   border: 1px solid rgba(136, 86, 54, 0.12);
-  border-radius: 16px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.66);
   color: var(--bt-text);
   outline: none;
@@ -241,25 +241,25 @@
 
 .bt-actions {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .bt-role-row {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .bt-role-option {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 52px;
-  padding: 0 12px;
+  min-height: 40px;
+  padding: 0 10px;
   border: 1px solid rgba(136, 86, 54, 0.12);
-  border-radius: 16px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.62);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--bt-text);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48);
@@ -272,12 +272,12 @@
 
 .bt-actions button,
 .bt-chat-form button {
-  height: 40px;
+  height: 34px;
   border: 1px solid transparent;
-  border-radius: 14px;
+  border-radius: 12px;
   background: linear-gradient(135deg, var(--bt-accent), #f3914c);
   color: #fff9f5;
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
   font-weight: 700;
   box-shadow: 0 12px 24px rgba(239, 108, 77, 0.18);
@@ -294,16 +294,16 @@
 
 .bt-presence,
 .bt-hint {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--bt-text-muted);
 }
 
 .bt-meta-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 11px 12px;
-  border-radius: 16px;
+  gap: 5px;
+  padding: 8px 9px;
+  border-radius: 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.66), rgba(255, 245, 238, 0.78));
   border: 1px solid rgba(255, 255, 255, 0.72);
 }
@@ -315,7 +315,7 @@
 
 .bt-chat-list {
   flex: 0 0 auto;
-  min-height: 64px;
+  min-height: 54px;
   display: flex;
   align-items: stretch;
   padding: 0;
@@ -323,12 +323,12 @@
 
 .bt-chat-item {
   width: 100%;
-  padding: 11px 12px;
-  border-radius: 16px;
+  padding: 8px 9px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.66);
   border: 1px solid rgba(255, 255, 255, 0.74);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.35;
   box-shadow: 0 10px 20px rgba(126, 85, 58, 0.06);
 }
 
@@ -347,7 +347,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .bt-chat-meta strong {
@@ -356,7 +356,7 @@
 
 .bt-chat-meta span {
   color: var(--bt-text-muted);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .bt-chat-text {
@@ -367,10 +367,10 @@
 .bt-chat-form {
   flex: 0 0 auto;
   display: flex;
-  gap: 8px;
+  gap: 6px;
   margin-top: auto;
-  padding: 10px;
-  border-radius: 16px;
+  padding: 8px;
+  border-radius: 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.64), rgba(255, 245, 238, 0.82));
   border: 1px solid rgba(255, 255, 255, 0.74);
 }
@@ -378,29 +378,29 @@
 .bt-chat-form input {
   flex: 1;
   min-width: 0;
-  height: 40px;
-  padding: 0 12px;
+  height: 34px;
+  padding: 0 10px;
   border: 1px solid rgba(136, 86, 54, 0.12);
-  border-radius: 15px;
+  border-radius: 10px;
   background: rgba(255, 255, 255, 0.72);
   color: var(--bt-text);
   outline: none;
 }
 
 .bt-chat-form button {
-  flex: 0 0 64px;
-  min-width: 64px;
-  padding: 0 10px;
+  flex: 0 0 52px;
+  min-width: 52px;
+  padding: 0 8px;
 }
 
 .bt-export-btn {
-  height: 40px;
+  height: 34px;
   border: 1px solid rgba(136, 86, 54, 0.12);
-  border-radius: 14px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.66);
   color: var(--bt-text);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -425,9 +425,9 @@
 
 @media (max-width: 640px) {
   .bt-panel {
-    width: min(320px, calc(100vw - 12px));
+    width: min(276px, calc(100vw - 12px));
     max-height: calc(100vh - 12px);
-    border-radius: 24px;
+    border-radius: 20px;
   }
 
   .bt-actions {
