@@ -133,6 +133,19 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   tabCache.delete(tabId);
 });
 
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  if (tab?.url) {
+    syncHostNavigationToActiveTab(tab.url);
+  }
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === "complete" && tab.active && tab.url) {
+    syncHostNavigationToActiveTab(tab.url);
+  }
+});
+
 function connectSocket(tabId, options) {
   disconnectSocket(tabId);
 
@@ -282,6 +295,34 @@ function scheduleReconnect(tabId) {
 
     connectSocket(tabId, latestState);
   }, 1500);
+}
+
+function syncHostNavigationToActiveTab(url) {
+  if (!isBilibiliUrl(url)) {
+    return;
+  }
+
+  for (const [tabId, desiredState] of tabState.entries()) {
+    if (desiredState.role !== "host") {
+      continue;
+    }
+
+    const socket = connections.get(tabId);
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      continue;
+    }
+
+    socket.send(
+      JSON.stringify({
+        type: "navigate",
+        url,
+      })
+    );
+  }
+}
+
+function isBilibiliUrl(url) {
+  return /^https:\/\/([a-z0-9-]+\.)?bilibili\.com\//i.test(String(url || ""));
 }
 
 function testServerConnection(serverUrl) {

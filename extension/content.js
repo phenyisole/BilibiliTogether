@@ -58,6 +58,8 @@ const state = {
   lastObservedVideoState: null,
   fullscreenMode: false,
   chatMessages: [],
+  speechQueue: [],
+  speechPlaying: false,
   debugLogs: [],
 };
 
@@ -255,6 +257,8 @@ function buildPanel() {
     if (state.speechEnabled) {
       speakPreview();
     } else if (window.speechSynthesis) {
+      state.speechQueue = [];
+      state.speechPlaying = false;
       window.speechSynthesis.cancel();
     }
   });
@@ -571,7 +575,7 @@ function sendChatMessage() {
     nickname: state.role === "host" ? "主" : "客",
     text,
     sentAt: Date.now(),
-  }, { speak: false });
+  }, { speak: true });
 }
 
 function watchVideo() {
@@ -1148,22 +1152,8 @@ function maybeSpeakMessage(message) {
     return;
   }
 
-  const voices = window.speechSynthesis.getVoices();
-  const preferredVoice =
-    voices.find((voice) => voice.lang?.toLowerCase().startsWith("zh")) ||
-    voices.find((voice) => voice.lang?.toLowerCase().startsWith("en")) ||
-    null;
-
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(`${message.text}`);
-  utterance.lang = "zh-CN";
-  if (preferredVoice) {
-    utterance.voice = preferredVoice;
-    utterance.lang = preferredVoice.lang || "zh-CN";
-  }
-  utterance.rate = 1;
-  utterance.pitch = 1;
-  window.speechSynthesis.speak(utterance);
+  state.speechQueue.push(`${resolveChatLabel(message)}说，${message.text}`);
+  speakNextMessage();
 }
 
 async function persistUiState() {
@@ -1198,6 +1188,42 @@ function speakPreview() {
     nickname: "提示",
     text: "朗读已开启",
   });
+}
+
+function speakNextMessage() {
+  if (!state.speechEnabled || !window.speechSynthesis || state.speechPlaying || state.speechQueue.length === 0) {
+    return;
+  }
+
+  const nextText = state.speechQueue.shift();
+  if (!nextText) {
+    return;
+  }
+
+  const voices = window.speechSynthesis.getVoices();
+  const preferredVoice =
+    voices.find((voice) => voice.lang?.toLowerCase().startsWith("zh")) ||
+    voices.find((voice) => voice.lang?.toLowerCase().startsWith("en")) ||
+    null;
+
+  const utterance = new SpeechSynthesisUtterance(nextText);
+  utterance.lang = "zh-CN";
+  if (preferredVoice) {
+    utterance.voice = preferredVoice;
+    utterance.lang = preferredVoice.lang || "zh-CN";
+  }
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.onend = () => {
+    state.speechPlaying = false;
+    speakNextMessage();
+  };
+  utterance.onerror = () => {
+    state.speechPlaying = false;
+    speakNextMessage();
+  };
+  state.speechPlaying = true;
+  window.speechSynthesis.speak(utterance);
 }
 
 chrome.runtime.onMessage.addListener((message) => {
