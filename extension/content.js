@@ -56,6 +56,8 @@ const state = {
   guestEnforceTimer: null,
   hostObserveTimer: null,
   lastObservedVideoState: null,
+  fullscreenMode: false,
+  chatMessages: [],
   debugLogs: [],
 };
 
@@ -117,6 +119,7 @@ async function init() {
   startHostObserveLoop();
   startGuestEnforceLoop();
   startUrlWatcher();
+  installFullscreenWatcher();
 
   if (state.sessionId) {
     connect();
@@ -307,6 +310,7 @@ function render() {
   elements.serverToggle.textContent = state.serverLocked ? "编辑" : "记住";
   elements.settingsPanel.style.display = state.settingsOpen ? "flex" : "none";
   elements.body.style.display = state.collapsed ? "none" : "flex";
+  elements.panel.classList.toggle("bt-panel-fullscreen", state.fullscreenMode);
   root.querySelector('[data-role="collapse"]').textContent = state.collapsed ? "+" : "-";
   elements.panel.classList.toggle("bt-panel-collapsed", state.collapsed);
   elements.status.textContent = state.isConnected ? `${roleText(state.role)}已连接` : elements.status.textContent;
@@ -316,6 +320,7 @@ function render() {
     state.role === "host"
       ? "你是主人。你在 B 站里的页面切换、播放、暂停和拖动会驱动客人。"
       : "你是客人。你会跟随主人在 B 站里的页面和视频状态。";
+  renderChatMessages();
 }
 
 async function saveSettings() {
@@ -390,6 +395,7 @@ async function leaveRoom(options = {}) {
   state.users = [];
   state.lastRemoteVideoState = null;
   state.lastObservedVideoState = null;
+  state.chatMessages = [];
   state.sessionId = "";
   state.chatListClearedAt = Date.now();
   clearChatIfFreshJoin(true);
@@ -473,6 +479,10 @@ function handleServerMessage(message) {
 
   if (message.type === "video_state") {
     if (state.role === "guest" && message.senderId === state.hostClientId) {
+      if (message.url && message.url !== location.href) {
+        navigateTo(message.url);
+        return;
+      }
       addDebugLog(
         "video:recv",
         `动作=${message.action} time=${Number(message.currentTime || 0).toFixed(2)} paused=${Boolean(message.paused)}`
@@ -539,18 +549,9 @@ function appendChatMessage(message, options = {}) {
     state.recentChatKeys.delete(firstKey);
   }
 
-  const item = document.createElement("div");
-  item.className = "bt-chat-item";
-  if (message.senderId === state.clientId) {
-    item.classList.add("bt-chat-item-self");
-  }
-  if ((message.nickname || "") === "系统") {
-    item.classList.add("bt-chat-item-system");
-  }
-  const time = new Date(message.sentAt || Date.now()).toLocaleTimeString();
-  item.innerHTML = `<div class="bt-chat-meta"><strong>${escapeHtml(resolveChatLabel(message))}</strong><span>${time}</span></div><div class="bt-chat-text">${escapeHtml(message.text || "")}</div>`;
-  elements.chatList.innerHTML = "";
-  elements.chatList.appendChild(item);
+  state.chatMessages.push(message);
+  state.chatMessages = state.chatMessages.slice(-100);
+  renderChatMessages();
 
   if (options.speak) {
     maybeSpeakMessage(message);
@@ -628,6 +629,22 @@ function installVisibilitySync() {
       syncCurrentVideoState();
     }, 300);
   });
+}
+
+function installFullscreenWatcher() {
+  const updateFullscreenMode = () => {
+    state.fullscreenMode = Boolean(
+      document.fullscreenElement ||
+      document.webkitFullscreenElement ||
+      Math.abs(window.innerHeight - screen.height) < 4
+    );
+    render();
+  };
+
+  document.addEventListener("fullscreenchange", updateFullscreenMode);
+  document.addEventListener("webkitfullscreenchange", updateFullscreenMode);
+  window.addEventListener("resize", updateFullscreenMode);
+  updateFullscreenMode();
 }
 
 function startHostSyncLoop() {
@@ -910,6 +927,31 @@ function clearChatIfFreshJoin(force = false) {
   if (force || existingItems.length > 60) {
     elements.chatList.innerHTML = "";
     state.recentChatKeys.clear();
+    state.chatMessages = [];
+  }
+}
+
+function renderChatMessages() {
+  if (!elements.chatList) {
+    return;
+  }
+
+  const maxVisible = state.panelHeight > 420 || state.fullscreenMode ? state.chatMessages.length : 5;
+  const visibleMessages = state.chatMessages.slice(-maxVisible);
+  elements.chatList.innerHTML = "";
+
+  for (const message of visibleMessages) {
+    const item = document.createElement("div");
+    item.className = "bt-chat-item";
+    if (message.senderId === state.clientId) {
+      item.classList.add("bt-chat-item-self");
+    }
+    if ((message.nickname || "") === "系统") {
+      item.classList.add("bt-chat-item-system");
+    }
+    const time = new Date(message.sentAt || Date.now()).toLocaleTimeString();
+    item.innerHTML = `<div class="bt-chat-meta"><strong>${escapeHtml(resolveChatLabel(message))}</strong><span>${time}</span></div><div class="bt-chat-text">${escapeHtml(message.text || "")}</div>`;
+    elements.chatList.appendChild(item);
   }
 }
 
