@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS = {
 const connections = new Map();
 const tabState = new Map();
 const tabCache = new Map();
+const reconnectIntents = new Map();
 
 chrome.runtime.onInstalled.addListener(async () => {
   const current = await chrome.storage.local.get(Object.keys(DEFAULT_SETTINGS));
@@ -101,6 +102,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "bt:get-tab-state") {
+    const desiredState = tabId ? tabState.get(tabId) : null;
+    const socket = tabId ? connections.get(tabId) : null;
+    sendResponse({
+      ok: true,
+      desiredState: desiredState || null,
+      connected: Boolean(socket && socket.readyState === WebSocket.OPEN),
+    });
+    return true;
+  }
+
   if (message.type === "bt:test-server") {
     const serverUrl = String(message.serverUrl || "");
     testServerConnection(serverUrl)
@@ -147,9 +159,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 function connectSocket(tabId, options) {
-  disconnectSocket(tabId);
+  disconnectSocket(tabId, { keepTabState: true, allowReconnect: false });
 
   const { serverUrl, sessionId, clientId, nickname, role } = options;
+  const reconnectIntent = Symbol(`reconnect-${tabId}`);
+  reconnectIntents.set(tabId, reconnectIntent);
   const ws = new WebSocket(serverUrl);
   connections.set(tabId, ws);
 
@@ -198,7 +212,7 @@ function connectSocket(tabId, options) {
     }
 
     postSocketEvent(tabId, "close");
-    scheduleReconnect(tabId);
+    scheduleReconnect(tabId, reconnectIntent);
   });
 
   ws.addEventListener("error", () => {
@@ -206,11 +220,16 @@ function connectSocket(tabId, options) {
   });
 }
 
-function disconnectSocket(tabId) {
+function disconnectSocket(tabId, options = {}) {
+  const { keepTabState = false, allowReconnect = false } = options;
   const existing = connections.get(tabId);
+  reconnectIntents.set(tabId, allowReconnect ? Symbol(`reconnect-${tabId}`) : null);
   if (existing) {
     connections.delete(tabId);
     existing.close();
+  }
+  if (!keepTabState) {
+    tabState.delete(tabId);
   }
 }
 
@@ -277,13 +296,16 @@ function shouldReuseConnection(previousState, nextState, socket) {
   );
 }
 
-function scheduleReconnect(tabId) {
+function scheduleReconnect(tabId, reconnectIntent) {
   const desiredState = tabState.get(tabId);
   if (!desiredState) {
     return;
   }
 
   setTimeout(() => {
+    if (reconnectIntents.get(tabId) !== reconnectIntent) {
+      return;
+    }
     if (connections.has(tabId)) {
       return;
     }

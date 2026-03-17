@@ -125,12 +125,25 @@ async function init() {
   startUrlWatcher();
   installFullscreenWatcher();
 
-  if (state.sessionId) {
+  const tabSession = await chrome.runtime.sendMessage({ type: "bt:get-tab-state" }).catch(() => null);
+  const desiredState = tabSession?.desiredState || null;
+  if (desiredState) {
+    state.sessionId = desiredState.sessionId || state.sessionId;
+    state.clientId = desiredState.clientId || state.clientId;
+    state.role = desiredState.role === "host" ? "host" : "guest";
+    state.nickname = state.role === "host" ? "主" : "客";
+    state.serverUrl = normalizeServerUrl(desiredState.serverUrl || state.serverUrl);
+    render();
     connect();
+    return;
+  }
+
+  if (state.sessionId) {
+    setStatus(false, "已记住房间，点进入后连接");
   } else {
     setStatus(false, "请输入房间秘钥");
-    render();
   }
+  render();
 }
 
 function buildPanel() {
