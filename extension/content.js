@@ -1194,7 +1194,7 @@ function maybeSpeakMessage(message) {
     return;
   }
 
-  state.speechQueue.push(`${resolveChatLabel(message)}说，${message.text}`);
+  state.speechQueue.push(`${message.text}`);
   speakNextMessage();
 }
 
