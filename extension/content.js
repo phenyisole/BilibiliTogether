@@ -1101,6 +1101,16 @@ function resolveChatLabel(message) {
 }
 
 function initDrag() {
+  const getDragWidth = (targetElement) => {
+    if (targetElement === elements.miniLauncher) {
+      return targetElement.offsetWidth;
+    }
+    if (state.fullscreenMode) {
+      return elements.panel.getBoundingClientRect().width || elements.panel.offsetWidth;
+    }
+    return elements.panel.offsetWidth;
+  };
+
   const startDrag = (event, targetElement, captureElement = targetElement) => {
     if (event.target.closest(".bt-icon-btn")) {
       return;
@@ -1123,7 +1133,7 @@ function initDrag() {
     }
 
     state.dragMoved = true;
-    const width = targetElement === elements.miniLauncher ? targetElement.offsetWidth : elements.panel.offsetWidth;
+    const width = getDragWidth(targetElement);
     state.panelX = Math.max(8, Math.min(window.innerWidth - width - 8, event.clientX - state.dragOffsetX));
     state.panelY = Math.max(8, Math.min(window.innerHeight - 48, event.clientY - state.dragOffsetY));
     if (state.rememberPanel) {
