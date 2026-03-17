@@ -57,6 +57,8 @@ const state = {
   hostObserveTimer: null,
   lastObservedVideoState: null,
   fullscreenMode: false,
+  fullscreenDockX: null,
+  fullscreenDockY: null,
   chatMessages: [],
   speechQueue: [],
   speechPlaying: false,
@@ -137,6 +139,13 @@ function buildPanel() {
       <span class="bt-mini-dot"></span>
       <span class="bt-mini-text">一起看</span>
     </button>
+    <div class="bt-fullscreen-dock" data-role="fullscreenDock">
+      <div class="bt-fullscreen-chip" data-role="fullscreenRole">客</div>
+      <form class="bt-fullscreen-form" data-role="fullscreenForm">
+        <input data-role="fullscreenInput" placeholder="发送一条消息" maxlength="500" />
+        <button type="submit">发送</button>
+      </form>
+    </div>
     <div class="bt-panel" style="display:${state.panelVisible ? "flex" : "none"}">
       <div class="bt-header" data-role="dragHandle">
         <div class="bt-header-copy">
@@ -208,6 +217,10 @@ function buildPanel() {
 
   elements.panel = root.querySelector(".bt-panel");
   elements.miniLauncher = root.querySelector('[data-role="miniLauncher"]');
+  elements.fullscreenDock = root.querySelector('[data-role="fullscreenDock"]');
+  elements.fullscreenRole = root.querySelector('[data-role="fullscreenRole"]');
+  elements.fullscreenForm = root.querySelector('[data-role="fullscreenForm"]');
+  elements.fullscreenInput = root.querySelector('[data-role="fullscreenInput"]');
   elements.status = root.querySelector('[data-role="status"]');
   elements.sessionId = root.querySelector('[data-role="sessionId"]');
   elements.hostRadio = root.querySelector('[data-role="hostRadio"]');
@@ -282,6 +295,10 @@ function buildPanel() {
     event.preventDefault();
     sendChatMessage();
   });
+  elements.fullscreenForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    sendChatMessage(elements.fullscreenInput);
+  });
   initDrag();
 
   render();
@@ -292,8 +309,13 @@ function render() {
     return;
   }
 
-  elements.panel.style.display = state.panelVisible && !state.collapsed ? "flex" : "none";
+  elements.panel.style.display = state.fullscreenMode ? "none" : state.panelVisible && !state.collapsed ? "flex" : "none";
   elements.miniLauncher.style.display = !state.panelVisible || state.collapsed ? "inline-flex" : "none";
+  elements.fullscreenDock.style.display = state.fullscreenMode ? "flex" : "none";
+  elements.fullscreenDock.style.left = state.fullscreenDockX == null ? "50%" : `${state.fullscreenDockX}px`;
+  elements.fullscreenDock.style.top = state.fullscreenDockY == null ? "18px" : `${state.fullscreenDockY}px`;
+  elements.fullscreenDock.style.transform = state.fullscreenDockX == null ? "translateX(-50%)" : "none";
+  elements.fullscreenRole.textContent = state.role === "host" ? "主" : "客";
   elements.panel.style.left = state.panelX == null ? "auto" : `${state.panelX}px`;
   elements.panel.style.right = state.panelX == null ? "20px" : "auto";
   elements.panel.style.top = `${state.panelY}px`;
@@ -320,6 +342,7 @@ function render() {
   elements.status.textContent = state.isConnected ? `${roleText(state.role)}已连接` : elements.status.textContent;
   elements.presence.textContent = `在线人数：${state.users.length}/2`;
   elements.chatInput.disabled = !state.isConnected;
+  elements.fullscreenInput.disabled = !state.isConnected;
   elements.hint.textContent =
     state.role === "host"
       ? "你是主人。你在 B 站里的页面切换、播放、暂停和拖动会驱动客人。"
@@ -566,13 +589,14 @@ function appendChatMessage(message, options = {}) {
   }
 }
 
-function sendChatMessage() {
-  const text = elements.chatInput.value.trim();
+function sendChatMessage(inputElement = elements.chatInput) {
+  const text = inputElement.value.trim();
   if (!text || !state.isConnected) {
     return;
   }
 
   elements.chatInput.value = "";
+  elements.fullscreenInput.value = "";
   sendToBackground({ type: "chat_message", text });
   appendChatMessage({
     senderId: state.clientId,
@@ -1127,6 +1151,9 @@ function initDrag() {
     if (targetElement === elements.miniLauncher) {
       return targetElement.offsetWidth;
     }
+    if (targetElement === elements.fullscreenDock) {
+      return targetElement.getBoundingClientRect().width || targetElement.offsetWidth;
+    }
     if (state.fullscreenMode) {
       return elements.panel.getBoundingClientRect().width || elements.panel.offsetWidth;
     }
@@ -1137,6 +1164,9 @@ function initDrag() {
     if (event.target.closest(".bt-icon-btn")) {
       return;
     }
+    if (event.target.closest("input, button") && targetElement === elements.fullscreenDock) {
+      return;
+    }
 
     const rect = targetElement.getBoundingClientRect();
     state.dragPointerId = event.pointerId;
@@ -1144,8 +1174,13 @@ function initDrag() {
     state.dragMoved = false;
     state.dragOffsetX = event.clientX - rect.left;
     state.dragOffsetY = event.clientY - rect.top;
-    state.panelX = rect.left;
-    state.panelY = rect.top;
+    if (targetElement === elements.fullscreenDock) {
+      state.fullscreenDockX = rect.left;
+      state.fullscreenDockY = rect.top;
+    } else {
+      state.panelX = rect.left;
+      state.panelY = rect.top;
+    }
     captureElement.setPointerCapture(event.pointerId);
   };
 
@@ -1156,8 +1191,15 @@ function initDrag() {
 
     state.dragMoved = true;
     const width = getDragWidth(targetElement);
-    state.panelX = Math.max(8, Math.min(window.innerWidth - width - 8, event.clientX - state.dragOffsetX));
-    state.panelY = Math.max(8, Math.min(window.innerHeight - 48, event.clientY - state.dragOffsetY));
+    const nextX = Math.max(8, Math.min(window.innerWidth - width - 8, event.clientX - state.dragOffsetX));
+    const nextY = Math.max(8, Math.min(window.innerHeight - 48, event.clientY - state.dragOffsetY));
+    if (targetElement === elements.fullscreenDock) {
+      state.fullscreenDockX = nextX;
+      state.fullscreenDockY = nextY;
+    } else {
+      state.panelX = nextX;
+      state.panelY = nextY;
+    }
     if (state.rememberPanel) {
       persistUiState();
     }
@@ -1185,6 +1227,10 @@ function initDrag() {
   elements.miniLauncher.addEventListener("pointermove", (event) => moveDrag(event, elements.miniLauncher));
   elements.miniLauncher.addEventListener("pointerup", (event) => stopDrag(event, elements.miniLauncher));
   elements.miniLauncher.addEventListener("pointercancel", (event) => stopDrag(event, elements.miniLauncher));
+  elements.fullscreenDock.addEventListener("pointerdown", (event) => startDrag(event, elements.fullscreenDock));
+  elements.fullscreenDock.addEventListener("pointermove", (event) => moveDrag(event, elements.fullscreenDock));
+  elements.fullscreenDock.addEventListener("pointerup", (event) => stopDrag(event, elements.fullscreenDock));
+  elements.fullscreenDock.addEventListener("pointercancel", (event) => stopDrag(event, elements.fullscreenDock));
   const resizeObserver = new ResizeObserver(() => {
     if (state.collapsed) {
       return;

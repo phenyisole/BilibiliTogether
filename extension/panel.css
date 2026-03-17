@@ -61,6 +61,74 @@
   background: transparent;
 }
 
+.bt-fullscreen-dock {
+  position: fixed;
+  top: 18px;
+  left: 50%;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  background: rgba(20, 20, 24, 0.42);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(14px);
+  z-index: 2147483647;
+}
+
+.bt-fullscreen-chip {
+  flex: 0 0 auto;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bt-fullscreen-form {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.bt-fullscreen-form input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  outline: none;
+}
+
+.bt-fullscreen-form input::placeholder {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.bt-fullscreen-form button {
+  flex: 0 0 50px;
+  height: 30px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .bt-panel-fullscreen {
   width: 220px !important;
   height: auto !important;
