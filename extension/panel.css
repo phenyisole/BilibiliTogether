@@ -368,7 +368,7 @@
   flex: 0 0 auto;
   display: flex;
   gap: 6px;
-  margin-top: auto;
+  margin-top: 0;
   padding: 8px;
   border-radius: 12px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.64), rgba(255, 245, 238, 0.82));

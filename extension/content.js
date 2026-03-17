@@ -75,9 +75,9 @@ chrome.runtime.onMessage.addListener((message) => {
 async function init() {
   const stored = await chrome.storage.local.get(STORAGE_KEYS);
   state.sessionId = stored.sessionId || "";
-  state.nickname = stored.nickname || createDefaultNickname();
   state.clientId = stored.clientId || crypto.randomUUID();
   state.role = stored.role === "host" ? "host" : "guest";
+  state.nickname = state.role === "host" ? "主" : "客";
   state.speechEnabled = Boolean(stored.speechEnabled);
   state.rememberPanel = stored.rememberPanel !== false;
   state.collapsed = Boolean(stored.collapsed);
@@ -160,10 +160,6 @@ function buildPanel() {
           <input data-role="sessionId" placeholder="例如：room-001" />
         </div>
         <div class="bt-field">
-          <label>昵称</label>
-          <input data-role="nickname" />
-        </div>
-        <div class="bt-field">
           <label>身份</label>
           <div class="bt-role-row">
             <label class="bt-role-option">
@@ -185,11 +181,11 @@ function buildPanel() {
           <div class="bt-presence" data-role="presence">在线人数：0/2</div>
           <div class="bt-hint" data-role="hint">主人控制页面跟随、播放、暂停和拖动，客人只负责跟随。</div>
         </div>
-        <div class="bt-chat-list" data-role="chatList"></div>
         <form class="bt-chat-form" data-role="chatForm">
           <input data-role="chatInput" placeholder="发送一条消息" maxlength="500" />
           <button type="submit">发送</button>
         </form>
+        <div class="bt-chat-list" data-role="chatList"></div>
       </div>
     </div>
   `;
@@ -198,7 +194,6 @@ function buildPanel() {
   elements.miniLauncher = root.querySelector('[data-role="miniLauncher"]');
   elements.status = root.querySelector('[data-role="status"]');
   elements.sessionId = root.querySelector('[data-role="sessionId"]');
-  elements.nickname = root.querySelector('[data-role="nickname"]');
   elements.hostRadio = root.querySelector('[data-role="hostRadio"]');
   elements.guestRadio = root.querySelector('[data-role="guestRadio"]');
   elements.roleBadge = root.querySelector('[data-role="roleBadge"]');
@@ -287,7 +282,6 @@ function render() {
   elements.miniLauncher.style.right = state.panelX == null ? "20px" : "auto";
   elements.miniLauncher.style.top = `${state.panelY}px`;
   elements.sessionId.value = state.sessionId;
-  elements.nickname.value = state.nickname;
   elements.hostRadio.checked = state.role === "host";
   elements.guestRadio.checked = state.role !== "host";
   elements.roleBadge.textContent = state.role === "host" ? "主人模式" : "客人模式";
@@ -308,8 +302,8 @@ function render() {
 
 async function saveSettings() {
   state.sessionId = elements.sessionId.value.trim();
-  state.nickname = elements.nickname.value.trim() || createDefaultNickname();
   state.role = elements.hostRadio.checked ? "host" : "guest";
+  state.nickname = state.role === "host" ? "主" : "客";
   state.speechEnabled = elements.speechEnabled.checked;
   state.rememberPanel = elements.rememberPanel.checked;
 
@@ -418,13 +412,13 @@ function handleServerMessage(message) {
   }
 
   if (message.type === "peer_joined") {
-    appendPresenceMessage(message.nickname || "对方", "加入了房间");
+    appendPresenceMessage(message.role === "host" ? "主" : "客", "加入了房间");
     return;
   }
 
   if (message.type === "peer_left") {
     const leavingUser = state.users.find((user) => user.clientId === message.clientId);
-    appendPresenceMessage(leavingUser?.nickname || "对方", "离开了房间");
+    appendPresenceMessage(leavingUser?.role === "host" ? "主" : "客", "离开了房间");
     return;
   }
 
@@ -485,10 +479,10 @@ function appendSystemMessage(text) {
   }, { speak: false });
 }
 
-function appendPresenceMessage(nickname, actionText) {
+function appendPresenceMessage(roleLabel, actionText) {
   appendChatMessage(
     {
-      nickname,
+      nickname: roleLabel,
       text: actionText,
       sentAt: Date.now(),
     },
@@ -520,7 +514,7 @@ function appendChatMessage(message, options = {}) {
     item.classList.add("bt-chat-item-system");
   }
   const time = new Date(message.sentAt || Date.now()).toLocaleTimeString();
-  item.innerHTML = `<div class="bt-chat-meta"><strong>${escapeHtml(message.nickname || "Guest")}</strong><span>${time}</span></div><div class="bt-chat-text">${escapeHtml(message.text || "")}</div>`;
+  item.innerHTML = `<div class="bt-chat-meta"><strong>${escapeHtml(resolveChatLabel(message))}</strong><span>${time}</span></div><div class="bt-chat-text">${escapeHtml(message.text || "")}</div>`;
   elements.chatList.innerHTML = "";
   elements.chatList.appendChild(item);
 
@@ -539,7 +533,7 @@ function sendChatMessage() {
   sendToBackground({ type: "chat_message", text });
   appendChatMessage({
     senderId: state.clientId,
-    nickname: `${state.nickname}（我）`,
+    nickname: state.role === "host" ? "主" : "客",
     text,
     sentAt: Date.now(),
   }, { speak: false });
@@ -864,10 +858,6 @@ function getVideoElement() {
     })[0] || null;
 }
 
-function createDefaultNickname() {
-  return `用户-${Math.random().toString(36).slice(2, 6)}`;
-}
-
 function isBilibiliUrl(url) {
   return /^https:\/\/([a-z0-9-]+\.)?bilibili\.com\//i.test(url);
 }
@@ -891,6 +881,32 @@ function clearChatIfFreshJoin(force = false) {
 
 function roleText(role) {
   return role === "host" ? "主人" : "客人";
+}
+
+function roleShortText(role) {
+  return role === "host" ? "主" : "客";
+}
+
+function resolveChatLabel(message) {
+  if ((message.nickname || "") === "系统") {
+    return "系统";
+  }
+
+  if (message.senderId) {
+    if (message.senderId === state.hostClientId) {
+      return "主";
+    }
+    if (message.senderId === state.clientId) {
+      return roleShortText(state.role);
+    }
+    return state.role === "host" ? "客" : "主";
+  }
+
+  if (message.role) {
+    return roleShortText(message.role);
+  }
+
+  return "消息";
 }
 
 function initDrag() {
