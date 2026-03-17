@@ -40,12 +40,14 @@ const state = {
   rememberPanel: true,
   collapsed: false,
   dragPointerId: null,
+  dragSource: null,
+  dragMoved: false,
   dragOffsetX: 0,
   dragOffsetY: 0,
   panelX: null,
   panelY: 88,
-  panelWidth: 348,
-  panelHeight: 620,
+  panelWidth: 312,
+  panelHeight: 540,
   voicesReady: false,
   hostSyncTimer: null,
   guestEnforceTimer: null,
@@ -81,8 +83,8 @@ async function init() {
   state.collapsed = Boolean(stored.collapsed);
   state.panelX = typeof stored.panelX === "number" ? stored.panelX : null;
   state.panelY = typeof stored.panelY === "number" ? stored.panelY : 88;
-  state.panelWidth = typeof stored.panelWidth === "number" ? stored.panelWidth : 348;
-  state.panelHeight = typeof stored.panelHeight === "number" ? stored.panelHeight : 620;
+  state.panelWidth = typeof stored.panelWidth === "number" ? stored.panelWidth : 312;
+  state.panelHeight = typeof stored.panelHeight === "number" ? stored.panelHeight : 540;
 
   await chrome.storage.local.set({
     sessionId: state.sessionId,
@@ -221,6 +223,10 @@ function buildPanel() {
     render();
   });
   elements.miniLauncher.addEventListener("click", () => {
+    if (state.dragMoved) {
+      state.dragMoved = false;
+      return;
+    }
     state.collapsed = false;
     state.panelVisible = true;
     persistUiState();
@@ -244,8 +250,8 @@ function buildPanel() {
     if (!state.rememberPanel) {
       state.panelX = null;
       state.panelY = 88;
-      state.panelWidth = 348;
-      state.panelHeight = 620;
+      state.panelWidth = 312;
+      state.panelHeight = 540;
       state.collapsed = false;
     }
     await persistUiState();
@@ -316,8 +322,8 @@ async function saveSettings() {
     rememberPanel: state.rememberPanel,
     panelX: state.rememberPanel ? state.panelX : null,
     panelY: state.rememberPanel ? state.panelY : 88,
-    panelWidth: state.rememberPanel ? state.panelWidth : 348,
-    panelHeight: state.rememberPanel ? state.panelHeight : 620,
+    panelWidth: state.rememberPanel ? state.panelWidth : 312,
+    panelHeight: state.rememberPanel ? state.panelHeight : 540,
     collapsed: state.rememberPanel ? state.collapsed : false,
   });
 
@@ -888,47 +894,58 @@ function roleText(role) {
 }
 
 function initDrag() {
-  elements.dragHandle.addEventListener("pointerdown", (event) => {
+  const startDrag = (event, targetElement, captureElement = targetElement) => {
     if (event.target.closest(".bt-icon-btn")) {
       return;
     }
 
-    const rect = elements.panel.getBoundingClientRect();
+    const rect = targetElement.getBoundingClientRect();
     state.dragPointerId = event.pointerId;
+    state.dragSource = targetElement === elements.miniLauncher ? "mini" : "panel";
+    state.dragMoved = false;
     state.dragOffsetX = event.clientX - rect.left;
     state.dragOffsetY = event.clientY - rect.top;
     state.panelX = rect.left;
     state.panelY = rect.top;
-    elements.dragHandle.setPointerCapture(event.pointerId);
-  });
+    captureElement.setPointerCapture(event.pointerId);
+  };
 
-  elements.dragHandle.addEventListener("pointermove", (event) => {
+  const moveDrag = (event, targetElement) => {
     if (state.dragPointerId !== event.pointerId) {
       return;
     }
 
-    state.panelX = Math.max(8, Math.min(window.innerWidth - elements.panel.offsetWidth - 8, event.clientX - state.dragOffsetX));
+    state.dragMoved = true;
+    const width = targetElement === elements.miniLauncher ? targetElement.offsetWidth : elements.panel.offsetWidth;
+    state.panelX = Math.max(8, Math.min(window.innerWidth - width - 8, event.clientX - state.dragOffsetX));
     state.panelY = Math.max(8, Math.min(window.innerHeight - 48, event.clientY - state.dragOffsetY));
     if (state.rememberPanel) {
       persistUiState();
     }
     render();
-  });
+  };
 
-  const stopDrag = (event) => {
+  const stopDrag = (event, targetElement, captureElement = targetElement) => {
     if (state.dragPointerId !== event.pointerId) {
       return;
     }
     state.dragPointerId = null;
-    elements.dragHandle.releasePointerCapture(event.pointerId);
+    state.dragSource = null;
+    captureElement.releasePointerCapture(event.pointerId);
     if (state.rememberPanel) {
       persistUiState();
     }
   };
 
-  elements.dragHandle.addEventListener("pointerup", stopDrag);
-  elements.dragHandle.addEventListener("pointercancel", stopDrag);
+  elements.dragHandle.addEventListener("pointerdown", (event) => startDrag(event, elements.panel, elements.dragHandle));
+  elements.dragHandle.addEventListener("pointermove", (event) => moveDrag(event, elements.panel));
+  elements.dragHandle.addEventListener("pointerup", (event) => stopDrag(event, elements.panel, elements.dragHandle));
+  elements.dragHandle.addEventListener("pointercancel", (event) => stopDrag(event, elements.panel, elements.dragHandle));
 
+  elements.miniLauncher.addEventListener("pointerdown", (event) => startDrag(event, elements.miniLauncher));
+  elements.miniLauncher.addEventListener("pointermove", (event) => moveDrag(event, elements.miniLauncher));
+  elements.miniLauncher.addEventListener("pointerup", (event) => stopDrag(event, elements.miniLauncher));
+  elements.miniLauncher.addEventListener("pointercancel", (event) => stopDrag(event, elements.miniLauncher));
   const resizeObserver = new ResizeObserver(() => {
     if (state.collapsed) {
       return;
@@ -982,8 +999,8 @@ async function persistUiState() {
   await chrome.storage.local.set({
     panelX: state.rememberPanel ? state.panelX : null,
     panelY: state.rememberPanel ? state.panelY : 88,
-    panelWidth: state.rememberPanel ? state.panelWidth : 348,
-    panelHeight: state.rememberPanel ? state.panelHeight : 620,
+    panelWidth: state.rememberPanel ? state.panelWidth : 312,
+    panelHeight: state.rememberPanel ? state.panelHeight : 540,
     collapsed: state.rememberPanel ? state.collapsed : false,
     rememberPanel: state.rememberPanel,
     speechEnabled: state.speechEnabled,
