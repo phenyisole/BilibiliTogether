@@ -1018,8 +1018,7 @@ function renderChatMessages() {
     return;
   }
 
-  const maxVisible = state.panelHeight > 420 || state.fullscreenMode ? state.chatMessages.length : 5;
-  const visibleMessages = state.chatMessages.slice(-maxVisible);
+  const visibleMessages = state.chatMessages.slice(-6).reverse();
   elements.chatList.innerHTML = "";
 
   for (const message of visibleMessages) {
