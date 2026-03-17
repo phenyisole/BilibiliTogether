@@ -161,21 +161,22 @@ function buildPanel() {
         </div>
         <div class="bt-field">
           <label>身份</label>
-          <div class="bt-role-row">
-            <label class="bt-role-option">
-              <input data-role="hostRadio" type="radio" name="bt-role" value="host" />
-              <span>主人</span>
-            </label>
-            <label class="bt-role-option">
-              <input data-role="guestRadio" type="radio" name="bt-role" value="guest" />
-              <span>客人</span>
-            </label>
+          <div class="bt-inline-row">
+            <div class="bt-role-row">
+              <label class="bt-role-option">
+                <input data-role="hostRadio" type="radio" name="bt-role" value="host" />
+                <span>主人</span>
+              </label>
+              <label class="bt-role-option">
+                <input data-role="guestRadio" type="radio" name="bt-role" value="guest" />
+                <span>客人</span>
+              </label>
+            </div>
+            <div class="bt-actions">
+              <button data-role="save">进入</button>
+              <button data-role="leave" class="secondary">退出</button>
+            </div>
           </div>
-        </div>
-        <div class="bt-actions">
-          <button data-role="save">进入</button>
-          <button data-role="syncNow" class="secondary">同步</button>
-          <button data-role="leave" class="secondary">退出</button>
         </div>
         <div class="bt-meta-card">
           <div class="bt-presence" data-role="presence">在线人数：0/2</div>
@@ -255,7 +256,6 @@ function buildPanel() {
   root.querySelector('[data-role="exportLog"]').addEventListener("click", exportDebugLog);
 
   root.querySelector('[data-role="save"]').addEventListener("click", saveSettings);
-  root.querySelector('[data-role="syncNow"]').addEventListener("click", syncCurrentVideoState);
   root.querySelector('[data-role="leave"]').addEventListener("click", leaveRoom);
   elements.chatForm.addEventListener("submit", (event) => {
     event.preventDefault();

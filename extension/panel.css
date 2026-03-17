@@ -239,10 +239,17 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
+.bt-inline-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(110px, 0.8fr);
+  gap: 6px;
+  align-items: stretch;
+}
+
 .bt-actions {
   display: grid;
   gap: 6px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .bt-role-row {
@@ -430,8 +437,12 @@
     border-radius: 20px;
   }
 
+  .bt-inline-row {
+    grid-template-columns: 1fr;
+  }
+
   .bt-actions {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .bt-actions button {
