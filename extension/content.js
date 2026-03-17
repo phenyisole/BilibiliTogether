@@ -637,11 +637,15 @@ function installVisibilitySync() {
 
 function installFullscreenWatcher() {
   const updateFullscreenMode = () => {
-    state.fullscreenMode = Boolean(
-      document.fullscreenElement ||
-      document.webkitFullscreenElement ||
-      Math.abs(window.innerHeight - screen.height) < 4
-    );
+    const fullscreenHost = getFullscreenHost();
+    state.fullscreenMode = Boolean(fullscreenHost);
+
+    if (fullscreenHost && root.parentElement !== fullscreenHost) {
+      fullscreenHost.appendChild(root);
+    } else if (!fullscreenHost && root.parentElement !== document.documentElement) {
+      document.documentElement.appendChild(root);
+    }
+
     render();
   };
 
@@ -649,6 +653,34 @@ function installFullscreenWatcher() {
   document.addEventListener("webkitfullscreenchange", updateFullscreenMode);
   window.addEventListener("resize", updateFullscreenMode);
   updateFullscreenMode();
+}
+
+function getFullscreenHost() {
+  const nativeFullscreenHost = document.fullscreenElement || document.webkitFullscreenElement;
+  if (nativeFullscreenHost instanceof Element) {
+    return nativeFullscreenHost;
+  }
+
+  const video = getVideoElement();
+  if (!video) {
+    return null;
+  }
+
+  const rect = video.getBoundingClientRect();
+  const coversViewport =
+    rect.width >= window.innerWidth * 0.72 &&
+    rect.height >= window.innerHeight * 0.72;
+
+  if (!coversViewport) {
+    return null;
+  }
+
+  return (
+    video.closest(".bpx-player-container") ||
+    video.closest(".bpx-player-video-wrap") ||
+    video.parentElement ||
+    null
+  );
 }
 
 function startHostSyncLoop() {
