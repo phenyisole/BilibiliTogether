@@ -88,8 +88,13 @@ chrome.runtime.onMessage.addListener((message) => {
     state.role = desiredState.role === "host" ? "host" : "guest";
     state.nickname = state.role === "host" ? "主" : "客";
     state.serverUrl = normalizeServerUrl(desiredState.serverUrl || state.serverUrl);
+    addDebugLog("adopt", `接管房间 ${state.sessionId || "(空)"}`);
     setStatus(false, "正在接管同步...");
     render();
+    window.setTimeout(() => {
+      connect();
+    }, 60);
+    return;
   }
 });
 
