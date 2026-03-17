@@ -144,7 +144,7 @@ function buildPanel() {
       <div class="bt-body" data-role="body">
         <div class="bt-hero">
           <div class="bt-hero-chip" data-role="roleBadge">客人模式</div>
-          <div class="bt-hero-chip bt-hero-chip-muted" data-role="serverBadge">服务器已内置</div>
+          <div class="bt-hero-chip bt-hero-chip-muted" data-role="serverBadge">未设置服务器</div>
         </div>
         <div class="bt-settings" data-role="settingsPanel">
           <div class="bt-settings-title">常用设置</div>
